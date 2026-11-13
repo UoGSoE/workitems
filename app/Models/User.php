@@ -46,6 +46,9 @@ class User extends Authenticatable
 
     public function workItems(): BelongsToMany
     {
-        return $this->belongsToMany(WorkItem::class)->withTimestamps();
+        return $this->belongsToMany(WorkItem::class)
+            ->using(UserWorkItem::class)
+            ->withPivot('status', 'added_by_id')
+            ->withTimestamps();
     }
 }

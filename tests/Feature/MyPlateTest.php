@@ -1,5 +1,7 @@
 <?php
 
+use App\Enums\PlateSection;
+use App\Enums\PlateStatus;
 use App\Enums\WorkItemStatus;
 use App\Livewire\MyPlate;
 use App\Models\User;
@@ -13,9 +15,9 @@ test('a guest is sent to the login page', function () {
 test('a person sees their own plate and horizon and nobody elses', function () {
     $user = User::factory()->create();
     $colleague = User::factory()->create();
-    $onMyPlate = WorkItem::factory()->heldBy($user)->create();
-    $onMyHorizon = WorkItem::factory()->upcoming()->heldBy($user)->create();
-    $onColleaguesPlate = WorkItem::factory()->heldBy($colleague)->create();
+    $onMyPlate = WorkItem::factory()->onPlateOf($user)->create();
+    $onMyHorizon = WorkItem::factory()->onHorizonOf($user)->create();
+    $onColleaguesPlate = WorkItem::factory()->onPlateOf($colleague)->create();
 
     $this->actingAs($user)
         ->get(route('home'))
@@ -39,7 +41,7 @@ test('typing into the whats on box puts a work item on my plate', function () {
 
     $workItem = WorkItem::sole();
     expect($workItem->title)->toBe('Update the samba servers')
-        ->and($workItem->status)->toBe(WorkItemStatus::InProgress)
+        ->and($workItem->status)->toBe(WorkItemStatus::Open)
         ->and($workItem->people->modelKeys())->toBe([$user->id])
         ->and($colleague->workItems)->toBeEmpty();
 });
@@ -58,35 +60,64 @@ test('an empty whats on box adds nothing', function () {
 
 test('a person can move one of their work items to another status', function () {
     $user = User::factory()->create();
-    $finished = WorkItem::factory()->heldBy($user)->create();
-    $stillOnMyPlate = WorkItem::factory()->heldBy($user)->create();
+    $finished = WorkItem::factory()->onPlateOf($user)->create();
+    $stillOnMyPlate = WorkItem::factory()->onPlateOf($user)->create();
 
     Livewire::actingAs($user)
         ->test(MyPlate::class)
-        ->call('moveTo', $finished->id, WorkItemStatus::Done->value)
+        ->call('moveTo', $finished->id, PlateSection::Done->value)
         ->assertSeeInOrder(['My plate', $stillOnMyPlate->title, 'Done', $finished->title]);
 
     expect($finished->fresh()->status)->toBe(WorkItemStatus::Done)
-        ->and($stillOnMyPlate->fresh()->status)->toBe(WorkItemStatus::InProgress);
+        ->and($stillOnMyPlate->fresh()->status)->toBe(WorkItemStatus::Open);
+});
+
+test('moving a shared work item to my horizon leaves it on my colleagues plate', function () {
+    $user = User::factory()->create();
+    $colleague = User::factory()->create();
+    $shared = WorkItem::factory()->onPlateOf($user)->onPlateOf($colleague)->create();
+
+    Livewire::actingAs($user)
+        ->test(MyPlate::class)
+        ->call('moveTo', $shared->id, PlateSection::Horizon->value);
+
+    expect($user->workItems()->sole()->pivot->status)->toBe(PlateStatus::Upcoming)
+        ->and($colleague->workItems()->sole()->pivot->status)->toBe(PlateStatus::InProgress)
+        ->and($shared->fresh()->status)->toBe(WorkItemStatus::Open);
+});
+
+test('parking a shared work item parks it for everyone on it', function () {
+    $user = User::factory()->create();
+    $colleague = User::factory()->create();
+    $shared = WorkItem::factory()->onPlateOf($user)->onPlateOf($colleague)->create();
+    $colleaguesOwn = WorkItem::factory()->onPlateOf($colleague)->create();
+
+    Livewire::actingAs($user)
+        ->test(MyPlate::class)
+        ->call('moveTo', $shared->id, PlateSection::Parked->value);
+
+    Livewire::actingAs($colleague)
+        ->test(MyPlate::class)
+        ->assertSeeInOrder(['My plate', $colleaguesOwn->title, 'Parked', $shared->title]);
 });
 
 test('a person cannot move a work item that is not on their plate', function () {
     $user = User::factory()->create();
     $colleague = User::factory()->create();
-    $onColleaguesPlate = WorkItem::factory()->heldBy($colleague)->create();
+    $onColleaguesPlate = WorkItem::factory()->onPlateOf($colleague)->create();
 
     Livewire::actingAs($user)
         ->test(MyPlate::class)
-        ->call('moveTo', $onColleaguesPlate->id, WorkItemStatus::Done->value)
+        ->call('moveTo', $onColleaguesPlate->id, PlateSection::Done->value)
         ->assertNotFound();
 
-    expect($onColleaguesPlate->fresh()->status)->toBe(WorkItemStatus::InProgress);
+    expect($onColleaguesPlate->fresh()->status)->toBe(WorkItemStatus::Open);
 });
 
 test('a person can edit the details of one of their work items', function () {
     $user = User::factory()->create();
-    $edited = WorkItem::factory()->heldBy($user)->create();
-    $untouched = WorkItem::factory()->heldBy($user)->create();
+    $edited = WorkItem::factory()->onPlateOf($user)->create();
+    $untouched = WorkItem::factory()->onPlateOf($user)->create();
 
     Livewire::actingAs($user)
         ->test(MyPlate::class)
@@ -106,13 +137,13 @@ test('a person can edit the details of one of their work items', function () {
         ->and($edited->effort_days)->toBe(1)
         ->and($edited->elapsed_days)->toBe(3)
         ->and($edited->due_on->toDateString())->toBe('2026-12-18')
-        ->and($edited->status)->toBe(WorkItemStatus::InProgress)
+        ->and($edited->status)->toBe(WorkItemStatus::Open)
         ->and($untouched->fresh()->title)->toBe($untouched->title);
 });
 
 test('invalid details are not saved', function () {
     $user = User::factory()->create();
-    $workItem = WorkItem::factory()->heldBy($user)->create(['effort_days' => 2]);
+    $workItem = WorkItem::factory()->onPlateOf($user)->create(['effort_days' => 2]);
 
     Livewire::actingAs($user)
         ->test(MyPlate::class)
@@ -130,7 +161,7 @@ test('invalid details are not saved', function () {
 
 test('clearing the optional details empties them', function () {
     $user = User::factory()->create();
-    $workItem = WorkItem::factory()->heldBy($user)->create([
+    $workItem = WorkItem::factory()->onPlateOf($user)->create([
         'notes' => 'Waiting on the new rack',
         'effort_days' => 2,
         'elapsed_days' => 5,
@@ -156,7 +187,7 @@ test('clearing the optional details empties them', function () {
 
 test('a work item shows its rough size and by when', function () {
     $user = User::factory()->create();
-    WorkItem::factory()->heldBy($user)->create([
+    WorkItem::factory()->onPlateOf($user)->create([
         'effort_days' => 1,
         'elapsed_days' => 3,
         'due_on' => '2026-12-18',

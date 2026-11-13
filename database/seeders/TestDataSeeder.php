@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Enums\WorkItemStatus;
 use App\Models\User;
 use App\Models\WorkItem;
 use Illuminate\Database\Seeder;
@@ -42,29 +41,25 @@ class TestDataSeeder extends Seeder
 
     private function createPlateFor(User $user): void
     {
-        $workItems = [
-            ['title' => 'Renew the wildcard certificate', 'status' => WorkItemStatus::Done, 'effort_days' => 1],
-            ['title' => 'Tidy up the old wiki pages', 'status' => WorkItemStatus::Parked],
-            ['title' => 'New server for the registry storage', 'status' => WorkItemStatus::Upcoming, 'notes' => 'Does not exist yet. The registry storage work waits on it.'],
-            ['title' => 'Replace the storage behind the container registry', 'status' => WorkItemStatus::Upcoming, 'effort_days' => 1, 'elapsed_days' => 3],
-            ['title' => 'Move the VM-hosted apps into Compose', 'status' => WorkItemStatus::Upcoming, 'effort_days' => 10, 'elapsed_days' => 30],
-            ['title' => 'Move the largest research group off the out-of-date host', 'status' => WorkItemStatus::Upcoming, 'effort_days' => 8, 'elapsed_days' => 20],
-            ['title' => 'One CI setup in place of two', 'status' => WorkItemStatus::Upcoming, 'effort_days' => 5],
-            ['title' => 'Settle the spread of language versions', 'status' => WorkItemStatus::Upcoming],
-            ['title' => 'Change the base image', 'status' => WorkItemStatus::InProgress, 'effort_days' => 3, 'elapsed_days' => 10],
-            ['title' => 'Move container hosting to plain Compose behind the existing proxy', 'status' => WorkItemStatus::InProgress, 'effort_days' => 10, 'elapsed_days' => 30, 'due_on' => now()->addMonth()],
-            ['title' => 'Every app on the current framework version', 'status' => WorkItemStatus::InProgress, 'effort_days' => 20, 'elapsed_days' => 60, 'due_on' => now()->addMonths(3), 'notes' => 'One job repeated across every app.'],
-        ];
+        WorkItem::factory()->done()->onPlateOf($user)->create(['title' => 'Renew the wildcard certificate', 'effort_days' => 1]);
+        WorkItem::factory()->parked()->onPlateOf($user)->create(['title' => 'Tidy up the old wiki pages']);
 
-        foreach ($workItems as $workItem) {
-            $user->workItems()->create($workItem);
-        }
+        WorkItem::factory()->onHorizonOf($user)->create(['title' => 'New server for the registry storage', 'notes' => 'Does not exist yet. The registry storage work waits on it.']);
+        WorkItem::factory()->onHorizonOf($user)->create(['title' => 'Replace the storage behind the container registry', 'effort_days' => 1, 'elapsed_days' => 3]);
+        WorkItem::factory()->onHorizonOf($user)->create(['title' => 'Move the VM-hosted apps into Compose', 'effort_days' => 10, 'elapsed_days' => 30]);
+        WorkItem::factory()->onHorizonOf($user)->create(['title' => 'Move the largest research group off the out-of-date host', 'effort_days' => 8, 'elapsed_days' => 20]);
+        WorkItem::factory()->onHorizonOf($user)->create(['title' => 'One CI setup in place of two', 'effort_days' => 5]);
+        WorkItem::factory()->onHorizonOf($user)->create(['title' => 'Settle the spread of language versions']);
+
+        WorkItem::factory()->onPlateOf($user)->create(['title' => 'Change the base image', 'effort_days' => 3, 'elapsed_days' => 10]);
+        WorkItem::factory()->onPlateOf($user)->create(['title' => 'Move container hosting to plain Compose behind the existing proxy', 'effort_days' => 10, 'elapsed_days' => 30, 'due_on' => now()->addMonth()]);
+        WorkItem::factory()->onPlateOf($user)->create(['title' => 'Every app on the current framework version', 'notes' => 'One job repeated across every app.', 'effort_days' => 20, 'elapsed_days' => 60, 'due_on' => now()->addMonths(3)]);
     }
 
     private function createColleaguesWithPlates(): void
     {
         User::factory()->count(3)->create()->each(function (User $colleague) {
-            WorkItem::factory()->count(3)->heldBy($colleague)->create();
+            WorkItem::factory()->count(3)->onPlateOf($colleague)->create();
         });
     }
 }

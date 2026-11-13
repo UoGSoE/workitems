@@ -5,14 +5,14 @@
         <flux:input wire:model="whatsOn" label="What's on?" description:trailing="Press Enter to put it on your plate." autofocus />
     </form>
 
-    @foreach ($statuses as $status)
-        @continue(! $workItemsByStatus->has($status->value))
+    @foreach ($sections as $section)
+        @continue(! $workItemsBySection->has($section->value))
 
-        <section wire:key="status-{{ $status->value }}" class="mt-8">
-            <flux:heading size="lg" level="2">{{ $status->label() }}</flux:heading>
+        <section wire:key="section-{{ $section->value }}" class="mt-8">
+            <flux:heading size="lg" level="2">{{ $section->label() }}</flux:heading>
 
             <ul class="mt-2 divide-y divide-zinc-200 dark:divide-zinc-700">
-                @foreach ($workItemsByStatus[$status->value] as $workItem)
+                @foreach ($workItemsBySection[$section->value] as $workItem)
                     <li wire:key="work-item-{{ $workItem->id }}" class="flex items-center gap-4 py-3">
                         <div class="min-w-0 flex-1">
                             <flux:text size="lg" variant="strong">{{ $workItem->title }}</flux:text>
@@ -21,7 +21,7 @@
                             @endif
                         </div>
 
-                        @if ($status !== $done)
+                        @if ($section !== $done)
                             <flux:button
                                 size="sm"
                                 wire:click="moveTo({{ $workItem->id }}, '{{ $done->value }}')"
@@ -36,10 +36,10 @@
                                 <flux:menu.item icon="pencil-square" wire:click="edit({{ $workItem->id }})">Edit</flux:menu.item>
                                 <flux:menu.separator />
 
-                                @foreach ($statuses as $otherStatus)
-                                    @continue($otherStatus === $status || $otherStatus === $done)
+                                @foreach ($sections as $otherSection)
+                                    @continue($otherSection === $section || $otherSection === $done)
 
-                                    <flux:menu.item wire:click="moveTo({{ $workItem->id }}, '{{ $otherStatus->value }}')">{{ $otherStatus->moveLabel() }}</flux:menu.item>
+                                    <flux:menu.item wire:click="moveTo({{ $workItem->id }}, '{{ $otherSection->value }}')">{{ $otherSection->moveLabel() }}</flux:menu.item>
                                 @endforeach
                             </flux:menu>
                         </flux:dropdown>

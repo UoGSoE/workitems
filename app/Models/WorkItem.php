@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\PlateSection;
 use App\Enums\WorkItemStatus;
 use Database\Factories\WorkItemFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -39,7 +40,10 @@ class WorkItem extends Model
      */
     public function people(): BelongsToMany
     {
-        return $this->belongsToMany(User::class)->withTimestamps();
+        return $this->belongsToMany(User::class)
+            ->using(UserWorkItem::class)
+            ->withPivot('status', 'added_by_id')
+            ->withTimestamps();
     }
 
     /**
@@ -52,5 +56,20 @@ class WorkItem extends Model
             $this->elapsed_days ? $this->elapsed_days.' '.Str::plural('day', $this->elapsed_days).' elapsed' : null,
             $this->due_on ? 'by '.$this->due_on->format('j M Y') : null,
         ])->filter()->join(', ');
+    }
+
+    /**
+     * Move this work item to a section of the given person's page. Parking it or
+     * finishing it applies to everyone on it; plate or horizon is theirs alone.
+     */
+    public function moveTo(PlateSection $section, User $user): void
+    {
+        $this->update(['status' => $section->workItemStatus()]);
+
+        if (! $section->plateStatus()) {
+            return;
+        }
+
+        $this->people()->updateExistingPivot($user, ['status' => $section->plateStatus()]);
     }
 }

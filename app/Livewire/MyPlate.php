@@ -2,6 +2,8 @@
 
 namespace App\Livewire;
 
+use App\Enums\PlateSection;
+use App\Enums\PlateStatus;
 use App\Enums\WorkItemStatus;
 use App\Models\WorkItem;
 use Flux\Flux;
@@ -25,10 +27,14 @@ class MyPlate extends Component
 
     public function render()
     {
+        $workItems = auth()->user()->workItems()->get()->sortByDesc('id');
+
         return view('livewire.my-plate', [
-            'statuses' => WorkItemStatus::cases(),
-            'done' => WorkItemStatus::Done,
-            'workItemsByStatus' => auth()->user()->workItems()->get()->sortByDesc('id')->groupBy('status'),
+            'sections' => PlateSection::cases(),
+            'done' => PlateSection::Done,
+            'workItemsBySection' => $workItems->groupBy(
+                fn (WorkItem $workItem) => PlateSection::of($workItem->status, $workItem->pivot->status)->value
+            ),
         ]);
     }
 
@@ -36,17 +42,17 @@ class MyPlate extends Component
     {
         $this->validate(['whatsOn' => 'required|string|max:255']);
 
-        auth()->user()->workItems()->create([
-            'title' => $this->whatsOn,
-            'status' => WorkItemStatus::InProgress,
-        ]);
+        auth()->user()->workItems()->create(
+            ['title' => $this->whatsOn, 'status' => WorkItemStatus::Open],
+            ['status' => PlateStatus::InProgress, 'added_by_id' => auth()->id()],
+        );
 
         $this->reset('whatsOn');
     }
 
-    public function moveTo(int $workItemId, string $status): void
+    public function moveTo(int $workItemId, string $section): void
     {
-        $this->myWorkItem($workItemId)->update(['status' => WorkItemStatus::from($status)]);
+        $this->myWorkItem($workItemId)->moveTo(PlateSection::from($section), auth()->user());
     }
 
     public function edit(int $workItemId): void
