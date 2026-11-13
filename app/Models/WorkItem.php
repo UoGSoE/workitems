@@ -3,8 +3,10 @@
 namespace App\Models;
 
 use App\Enums\PlateSection;
+use App\Enums\PlateStatus;
 use App\Enums\WorkItemStatus;
 use Database\Factories\WorkItemFactory;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -42,7 +44,7 @@ class WorkItem extends Model
     {
         return $this->belongsToMany(User::class)
             ->using(UserWorkItem::class)
-            ->withPivot('status', 'added_by_id')
+            ->withPivot('status', 'added_by_id', 'reason')
             ->withTimestamps();
     }
 
@@ -56,6 +58,28 @@ class WorkItem extends Model
             $this->elapsed_days ? $this->elapsed_days.' '.Str::plural('day', $this->elapsed_days).' elapsed' : null,
             $this->due_on ? 'by '.$this->due_on->format('j M Y') : null,
         ])->filter()->join(', ');
+    }
+
+    /**
+     * Everyone on this work item apart from the given person.
+     *
+     * @return Collection<int, User>
+     */
+    public function colleaguesOf(User $user): Collection
+    {
+        return $this->people->reject(fn (User $person) => $person->is($user));
+    }
+
+    /**
+     * Put this work item on someone's horizon. They pull it onto their own plate when they start on it.
+     */
+    public function addPerson(User $person, User $addedBy, ?string $reason = null): void
+    {
+        $this->people()->attach($person, [
+            'status' => PlateStatus::Upcoming,
+            'added_by_id' => $addedBy->id,
+            'reason' => $reason,
+        ]);
     }
 
     /**

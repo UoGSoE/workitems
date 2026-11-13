@@ -19,6 +19,9 @@
                             @if ($workItem->summary())
                                 <flux:text class="mt-1">{{ $workItem->summary() }}</flux:text>
                             @endif
+                            @if ($workItem->colleaguesOf(auth()->user())->isNotEmpty())
+                                <flux:text class="mt-1">With {{ $workItem->colleaguesOf(auth()->user())->pluck('full_name')->join(', ', ' and ') }}</flux:text>
+                            @endif
                         </div>
 
                         @if ($section !== $done)
@@ -34,6 +37,7 @@
 
                             <flux:menu>
                                 <flux:menu.item icon="pencil-square" wire:click="edit({{ $workItem->id }})">Edit</flux:menu.item>
+                                <flux:menu.item icon="user-plus" wire:click="choosePersonFor({{ $workItem->id }})">Add someone</flux:menu.item>
                                 <flux:menu.separator />
 
                                 @foreach ($sections as $otherSection)
@@ -63,6 +67,25 @@
                 <flux:spacer />
                 <flux:button x-on:click="$flux.modal('edit-work-item').close()">Cancel</flux:button>
                 <flux:button type="submit" variant="primary">Save</flux:button>
+            </div>
+        </form>
+    </flux:modal>
+
+    <flux:modal name="add-person" variant="flyout">
+        <form wire:submit="addPerson" class="space-y-6">
+            <flux:heading size="lg" level="2">Add someone</flux:heading>
+
+            <flux:select wire:model="personId" variant="listbox" searchable label="Who?" placeholder="Choose a colleague">
+                @foreach ($peopleToAdd as $person)
+                    <flux:select.option value="{{ $person->id }}" wire:key="person-{{ $person->id }}">{{ $person->full_name }}</flux:select.option>
+                @endforeach
+            </flux:select>
+            <flux:input wire:model="reason" label="Why them?" description:trailing="Optional. It lands on their horizon with this beside it." />
+
+            <div class="flex gap-2">
+                <flux:spacer />
+                <flux:button x-on:click="$flux.modal('add-person').close()">Cancel</flux:button>
+                <flux:button type="submit" variant="primary">Add</flux:button>
             </div>
         </form>
     </flux:modal>

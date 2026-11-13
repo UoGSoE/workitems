@@ -17,6 +17,7 @@ return new class extends Migration
             $table->foreignId('work_item_id')->constrained()->cascadeOnDelete();
             $table->string('status');
             $table->foreignId('added_by_id')->constrained('users');
+            $table->string('reason')->nullable();
             $table->timestamps();
         });
     }

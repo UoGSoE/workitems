@@ -5,8 +5,10 @@ namespace App\Livewire;
 use App\Enums\PlateSection;
 use App\Enums\PlateStatus;
 use App\Enums\WorkItemStatus;
+use App\Models\User;
 use App\Models\WorkItem;
 use Flux\Flux;
+use Illuminate\Validation\Rule;
 use Livewire\Component;
 
 class MyPlate extends Component
@@ -25,13 +27,20 @@ class MyPlate extends Component
 
     public $dueOn = '';
 
+    public $addingToId = null;
+
+    public $personId = '';
+
+    public $reason = '';
+
     public function render()
     {
-        $workItems = auth()->user()->workItems()->get()->sortByDesc('id');
+        $workItems = auth()->user()->workItems()->with('people')->get()->sortByDesc('id');
 
         return view('livewire.my-plate', [
             'sections' => PlateSection::cases(),
             'done' => PlateSection::Done,
+            'peopleToAdd' => User::whereDoesntHave('workItems', fn ($query) => $query->whereKey($this->addingToId))->orderBy('surname')->get(),
             'workItemsBySection' => $workItems->groupBy(
                 fn (WorkItem $workItem) => PlateSection::of($workItem->status, $workItem->pivot->status)->value
             ),
@@ -88,6 +97,28 @@ class MyPlate extends Component
         ]);
 
         Flux::modal('edit-work-item')->close();
+    }
+
+    public function choosePersonFor(int $workItemId): void
+    {
+        $this->addingToId = $this->myWorkItem($workItemId)->id;
+        $this->reset('personId', 'reason');
+
+        Flux::modal('add-person')->show();
+    }
+
+    public function addPerson(): void
+    {
+        $workItem = $this->myWorkItem($this->addingToId);
+
+        $this->validate([
+            'personId' => ['required', Rule::exists('users', 'id'), Rule::notIn($workItem->people->modelKeys())],
+            'reason' => 'nullable|string|max:255',
+        ]);
+
+        $workItem->addPerson(User::find($this->personId), addedBy: auth()->user(), reason: $this->reason ?: null);
+
+        Flux::modal('add-person')->close();
     }
 
     private function myWorkItem(int $workItemId): WorkItem

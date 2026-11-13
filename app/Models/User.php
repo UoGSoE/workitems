@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -48,7 +49,12 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(WorkItem::class)
             ->using(UserWorkItem::class)
-            ->withPivot('status', 'added_by_id')
+            ->withPivot('status', 'added_by_id', 'reason')
             ->withTimestamps();
+    }
+
+    protected function fullName(): Attribute
+    {
+        return Attribute::get(fn () => $this->forenames.' '.$this->surname);
     }
 }

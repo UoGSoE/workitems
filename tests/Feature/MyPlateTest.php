@@ -101,6 +101,89 @@ test('parking a shared work item parks it for everyone on it', function () {
         ->assertSeeInOrder(['My plate', $colleaguesOwn->title, 'Parked', $shared->title]);
 });
 
+test('adding a colleague to a work item puts it on their horizon and says who added them and why', function () {
+    $user = User::factory()->create();
+    $colleague = User::factory()->create();
+    $bystander = User::factory()->create();
+    $workItem = WorkItem::factory()->onPlateOf($user)->create();
+
+    Livewire::actingAs($user)
+        ->test(MyPlate::class)
+        ->call('choosePersonFor', $workItem->id)
+        ->set('personId', $colleague->id)
+        ->set('reason', 'You know how the DNS challenges are set up')
+        ->call('addPerson')
+        ->assertHasNoErrors();
+
+    $colleaguesRow = $colleague->workItems()->sole()->pivot;
+    expect($colleaguesRow->status)->toBe(PlateStatus::Upcoming)
+        ->and($colleaguesRow->addedBy->is($user))->toBeTrue()
+        ->and($colleaguesRow->reason)->toBe('You know how the DNS challenges are set up')
+        ->and($user->workItems()->sole()->pivot->status)->toBe(PlateStatus::InProgress)
+        ->and($bystander->workItems)->toBeEmpty();
+});
+
+test('nobody, a stranger or someone already on the work item cannot be added', function () {
+    $user = User::factory()->create();
+    $colleague = User::factory()->create();
+    $workItem = WorkItem::factory()->onPlateOf($user)->onPlateOf($colleague)->create();
+
+    Livewire::actingAs($user)
+        ->test(MyPlate::class)
+        ->call('choosePersonFor', $workItem->id)
+        ->set('personId', $colleague->id)
+        ->call('addPerson')
+        ->assertHasErrors(['personId'])
+        ->set('personId', '')
+        ->call('addPerson')
+        ->assertHasErrors(['personId'])
+        ->set('personId', 999999)
+        ->call('addPerson')
+        ->assertHasErrors(['personId']);
+
+    expect($workItem->people()->count())->toBe(2);
+});
+
+test('a person cannot add someone to a work item they are not on', function () {
+    $user = User::factory()->create();
+    $colleague = User::factory()->create();
+    $onColleaguesPlate = WorkItem::factory()->onPlateOf($colleague)->create();
+
+    Livewire::actingAs($user)
+        ->test(MyPlate::class)
+        ->call('choosePersonFor', $onColleaguesPlate->id)
+        ->assertNotFound();
+
+    expect($onColleaguesPlate->people()->count())->toBe(1);
+});
+
+test('a person cannot add themselves to a colleagues work item by tampering with the page', function () {
+    $user = User::factory()->create();
+    $colleague = User::factory()->create();
+    $onColleaguesPlate = WorkItem::factory()->onPlateOf($colleague)->create();
+
+    Livewire::actingAs($user)
+        ->test(MyPlate::class)
+        ->set('addingToId', $onColleaguesPlate->id)
+        ->set('personId', $user->id)
+        ->call('addPerson')
+        ->assertNotFound();
+
+    expect($user->workItems)->toBeEmpty();
+});
+
+test('a shared work item shows who else is on it', function () {
+    $user = User::factory()->create();
+    $colleague = User::factory()->create();
+    $anotherColleague = User::factory()->create();
+    WorkItem::factory()->onPlateOf($user)->onPlateOf($colleague)->onHorizonOf($anotherColleague)->create();
+
+    Livewire::actingAs($user)
+        ->test(MyPlate::class)
+        ->assertSee('With '.$colleague->full_name.' and '.$anotherColleague->full_name)
+        ->assertDontSee('With '.$user->full_name);
+});
+
 test('a person cannot move a work item that is not on their plate', function () {
     $user = User::factory()->create();
     $colleague = User::factory()->create();
