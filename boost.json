@@ -15,6 +15,10 @@
         "deploying-to-cloud",
         "laravel-best-practices",
         "testing-best-practices",
+        "configuring-horizon",
+        "socialite-development",
+        "fluxui-development",
+        "livewire-development",
         "tailwindcss-development"
     ]
 }
