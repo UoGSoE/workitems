@@ -9,12 +9,14 @@ use App\Models\User;
 use App\Models\WorkItem;
 use Flux\Flux;
 use Illuminate\Validation\Rule;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 class MyPlate extends Component
 {
     public $whatsOn = '';
 
+    #[Locked]
     public $editingId = null;
 
     public $title = '';
@@ -27,6 +29,7 @@ class MyPlate extends Component
 
     public $dueOn = '';
 
+    #[Locked]
     public $addingToId = null;
 
     public $personId = '';
@@ -40,7 +43,7 @@ class MyPlate extends Component
         return view('livewire.my-plate', [
             'sections' => PlateSection::cases(),
             'done' => PlateSection::Done,
-            'peopleToAdd' => User::whereDoesntHave('workItems', fn ($query) => $query->whereKey($this->addingToId))->orderBy('surname')->get(),
+            'peopleToAdd' => WorkItem::find($this->addingToId)?->peopleWhoCouldBeAdded()->get() ?? collect(),
             'workItemsBySection' => $workItems->groupBy(
                 fn (WorkItem $workItem) => PlateSection::of($workItem->status, $workItem->pivot->status)->value
             ),
@@ -112,7 +115,7 @@ class MyPlate extends Component
         $workItem = $this->myWorkItem($this->addingToId);
 
         $this->validate([
-            'personId' => ['required', Rule::exists('users', 'id'), Rule::notIn($workItem->people->modelKeys())],
+            'personId' => ['required', Rule::in($workItem->peopleWhoCouldBeAdded()->pluck('id'))],
             'reason' => 'nullable|string|max:255',
         ]);
 

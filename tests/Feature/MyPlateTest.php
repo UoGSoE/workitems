@@ -6,6 +6,7 @@ use App\Enums\WorkItemStatus;
 use App\Livewire\MyPlate;
 use App\Models\User;
 use App\Models\WorkItem;
+use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
 
 test('a guest is sent to the login page', function () {
@@ -25,6 +26,12 @@ test('a person sees their own plate and horizon and nobody elses', function () {
         ->assertSeeLivewire(MyPlate::class)
         ->assertSeeInOrder(['My plate', $onMyPlate->title, 'On the horizon', $onMyHorizon->title])
         ->assertDontSee($onColleaguesPlate->title);
+});
+
+test('the page content sits in a main landmark so a screen reader can jump to it', function () {
+    $this->actingAs(User::factory()->create())
+        ->get(route('home'))
+        ->assertSeeHtml('role="main"');
 });
 
 test('typing into the whats on box puts a work item on my plate', function () {
@@ -144,6 +151,27 @@ test('nobody, a stranger or someone already on the work item cannot be added', f
     expect($workItem->people()->count())->toBe(2);
 });
 
+test('someone already on a work item cannot be added twice by disguising their id', function () {
+    $user = User::factory()->create();
+    $colleague = User::factory()->create();
+    $workItem = WorkItem::factory()->onPlateOf($user)->onPlateOf($colleague)->create();
+
+    Livewire::actingAs($user)
+        ->test(MyPlate::class)
+        ->call('choosePersonFor', $workItem->id)
+        ->set('personId', '0'.$colleague->id)
+        ->call('addPerson')
+        ->assertHasErrors(['personId'])
+        ->set('personId', ' '.$colleague->id)
+        ->call('addPerson')
+        ->assertHasErrors(['personId'])
+        ->set('personId', [$colleague->id])
+        ->call('addPerson')
+        ->assertHasErrors(['personId']);
+
+    expect($workItem->people()->count())->toBe(2);
+});
+
 test('a person cannot add someone to a work item they are not on', function () {
     $user = User::factory()->create();
     $colleague = User::factory()->create();
@@ -157,19 +185,15 @@ test('a person cannot add someone to a work item they are not on', function () {
     expect($onColleaguesPlate->people()->count())->toBe(1);
 });
 
-test('a person cannot add themselves to a colleagues work item by tampering with the page', function () {
+test('the work item being edited or added to cannot be swapped from the browser', function () {
     $user = User::factory()->create();
     $colleague = User::factory()->create();
     $onColleaguesPlate = WorkItem::factory()->onPlateOf($colleague)->create();
+    $page = Livewire::actingAs($user)->test(MyPlate::class);
 
-    Livewire::actingAs($user)
-        ->test(MyPlate::class)
-        ->set('addingToId', $onColleaguesPlate->id)
-        ->set('personId', $user->id)
-        ->call('addPerson')
-        ->assertNotFound();
-
-    expect($user->workItems)->toBeEmpty();
+    expect(fn () => $page->set('addingToId', $onColleaguesPlate->id))->toThrow(CannotUpdateLockedPropertyException::class)
+        ->and(fn () => $page->set('editingId', $onColleaguesPlate->id))->toThrow(CannotUpdateLockedPropertyException::class)
+        ->and($user->workItems)->toBeEmpty();
 });
 
 test('a shared work item shows who else is on it', function () {

@@ -19,6 +19,7 @@ return new class extends Migration
             $table->foreignId('added_by_id')->constrained('users');
             $table->string('reason')->nullable();
             $table->timestamps();
+            $table->unique(['user_id', 'work_item_id']);
         });
     }
 

@@ -6,6 +6,7 @@ use App\Enums\PlateSection;
 use App\Enums\PlateStatus;
 use App\Enums\WorkItemStatus;
 use Database\Factories\WorkItemFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -76,6 +77,16 @@ class WorkItem extends Model
     public function colleaguesOf(User $user): Collection
     {
         return $this->people->reject(fn (User $person) => $person->is($user));
+    }
+
+    /**
+     * Everyone who is not on this work item yet.
+     *
+     * @return Builder<User>
+     */
+    public function peopleWhoCouldBeAdded(): Builder
+    {
+        return User::whereNotIn('id', $this->people->modelKeys())->orderBy('surname');
     }
 
     /**

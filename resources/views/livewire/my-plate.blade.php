@@ -68,7 +68,7 @@
         <form wire:submit="save" class="space-y-6">
             <flux:heading size="lg" level="2">Details</flux:heading>
 
-            <flux:input wire:model="title" label="What is it?" />
+            <flux:input wire:model="title" label="What is it?" autofocus />
             <flux:textarea wire:model="notes" label="Notes" rows="auto" />
             <flux:input wire:model="effortDays" type="number" min="1" label="Rough effort, in days" />
             <flux:input wire:model="elapsedDays" type="number" min="1" label="Rough elapsed time, in days" description:trailing="A day of work can still take a week to land." />
@@ -86,7 +86,11 @@
         <form wire:submit="addPerson" class="space-y-6">
             <flux:heading size="lg" level="2">Add someone</flux:heading>
 
-            <flux:select wire:model="personId" variant="listbox" searchable label="Who?" placeholder="Choose a colleague">
+            <flux:select wire:model="personId" variant="combobox" label="Who?">
+                <x-slot name="input">
+                    <flux:select.input placeholder="Type a name" autofocus />
+                </x-slot>
+
                 @foreach ($peopleToAdd as $person)
                     <flux:select.option value="{{ $person->id }}" wire:key="person-{{ $person->id }}">{{ $person->full_name }}</flux:select.option>
                 @endforeach
