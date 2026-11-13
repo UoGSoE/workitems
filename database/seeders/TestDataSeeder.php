@@ -13,6 +13,7 @@ class TestDataSeeder extends Seeder
         [$adminUser, $standardUser] = $this->createUsers();
 
         $this->createPlateFor($standardUser);
+        $this->createSharedWorkItems($adminUser, $standardUser);
         $this->createColleaguesWithPlates();
     }
 
@@ -54,6 +55,19 @@ class TestDataSeeder extends Seeder
         WorkItem::factory()->onPlateOf($user)->create(['title' => 'Change the base image', 'effort_days' => 3, 'elapsed_days' => 10]);
         WorkItem::factory()->onPlateOf($user)->create(['title' => 'Move container hosting to plain Compose behind the existing proxy', 'effort_days' => 10, 'elapsed_days' => 30, 'due_on' => now()->addMonth()]);
         WorkItem::factory()->onPlateOf($user)->create(['title' => 'Every app on the current framework version', 'notes' => 'One job repeated across every app.', 'effort_days' => 20, 'elapsed_days' => 60, 'due_on' => now()->addMonths(3)]);
+    }
+
+    private function createSharedWorkItems(User $adminUser, User $standardUser): void
+    {
+        WorkItem::factory()
+            ->onPlateOf($adminUser)
+            ->onHorizonOf($standardUser, addedBy: $adminUser, reason: 'You know how the DNS challenges are set up')
+            ->create(['title' => 'Certificates for the new research cluster', 'effort_days' => 2, 'elapsed_days' => 10]);
+
+        WorkItem::factory()
+            ->onPlateOf($standardUser)
+            ->onHorizonOf($adminUser, addedBy: $standardUser, reason: 'You hold the purchasing login')
+            ->create(['title' => 'Order the replacement disks', 'effort_days' => 1]);
     }
 
     private function createColleaguesWithPlates(): void

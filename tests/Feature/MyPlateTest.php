@@ -184,6 +184,60 @@ test('a shared work item shows who else is on it', function () {
         ->assertDontSee('With '.$user->full_name);
 });
 
+test('a work item a colleague added me to says who added me and why, with a way to ask them', function () {
+    $user = User::factory()->create();
+    $colleague = User::factory()->create();
+    WorkItem::factory()
+        ->onPlateOf($colleague)
+        ->onHorizonOf($user, addedBy: $colleague, reason: 'You know how the DNS challenges are set up')
+        ->create(['title' => 'Move the cluster']);
+
+    Livewire::actingAs($user)
+        ->test(MyPlate::class)
+        ->assertSee('Added by '.$colleague->full_name.': You know how the DNS challenges are set up')
+        ->assertSeeHtml('href="mailto:'.$colleague->email.'?subject=Move%20the%20cluster%20-%20wut%3F"');
+});
+
+test('a work item I added myself does not say who added it', function () {
+    $user = User::factory()->create();
+    WorkItem::factory()->onPlateOf($user)->create();
+    WorkItem::factory()->onHorizonOf($user)->create();
+
+    Livewire::actingAs($user)
+        ->test(MyPlate::class)
+        ->assertDontSee('Added by')
+        ->assertDontSee('Wut?');
+});
+
+test('a person can take themselves off a work item a colleague added them to', function () {
+    $user = User::factory()->create();
+    $colleague = User::factory()->create();
+    $notForMe = WorkItem::factory()->onPlateOf($colleague)->onHorizonOf($user, addedBy: $colleague)->create();
+    $stillMine = WorkItem::factory()->onPlateOf($colleague)->onHorizonOf($user, addedBy: $colleague)->create();
+
+    Livewire::actingAs($user)
+        ->test(MyPlate::class)
+        ->call('takeMeOff', $notForMe->id)
+        ->assertDontSee($notForMe->title)
+        ->assertSee($stillMine->title);
+
+    expect($notForMe->fresh()->people->modelKeys())->toBe([$colleague->id])
+        ->and($stillMine->fresh()->people()->count())->toBe(2);
+});
+
+test('a person cannot take themselves off a work item they added themselves', function () {
+    $user = User::factory()->create();
+    $myOwn = WorkItem::factory()->onPlateOf($user)->create();
+
+    Livewire::actingAs($user)
+        ->test(MyPlate::class)
+        ->assertDontSee('Take me off this')
+        ->call('takeMeOff', $myOwn->id)
+        ->assertForbidden();
+
+    expect($myOwn->fresh()->people->modelKeys())->toBe([$user->id]);
+});
+
 test('a person cannot move a work item that is not on their plate', function () {
     $user = User::factory()->create();
     $colleague = User::factory()->create();

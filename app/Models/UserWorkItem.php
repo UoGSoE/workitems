@@ -18,11 +18,26 @@ class UserWorkItem extends Pivot
     {
         return [
             'status' => PlateStatus::class,
+            'user_id' => 'integer',
+            'added_by_id' => 'integer',
         ];
     }
 
     public function addedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'added_by_id');
+    }
+
+    public function wasAddedBySomeoneElse(): bool
+    {
+        return $this->added_by_id !== $this->user_id;
+    }
+
+    /**
+     * Who added this person and why, eg "Added by Jenny MacAdmin: you know how the backups work".
+     */
+    public function addedByLine(): string
+    {
+        return collect(['Added by '.$this->addedBy->full_name, $this->reason])->filter()->join(': ');
     }
 }

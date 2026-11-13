@@ -121,6 +121,15 @@ class MyPlate extends Component
         Flux::modal('add-person')->close();
     }
 
+    public function takeMeOff(int $workItemId): void
+    {
+        $workItem = $this->myWorkItem($workItemId);
+
+        abort_unless($workItem->pivot->wasAddedBySomeoneElse(), 403);
+
+        $workItem->people()->detach(auth()->user());
+    }
+
     private function myWorkItem(int $workItemId): WorkItem
     {
         return auth()->user()->workItems()->findOrFail($workItemId);

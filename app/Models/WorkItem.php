@@ -61,6 +61,14 @@ class WorkItem extends Model
     }
 
     /**
+     * A link that starts an email to whoever added the person this work item was loaded for, asking why.
+     */
+    public function wutLink(): string
+    {
+        return 'mailto:'.$this->pivot->addedBy->email.'?subject='.rawurlencode($this->title.' - wut?');
+    }
+
+    /**
      * Everyone on this work item apart from the given person.
      *
      * @return Collection<int, User>

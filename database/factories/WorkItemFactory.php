@@ -38,16 +38,20 @@ class WorkItemFactory extends Factory
 
     public function onPlateOf(User $user): static
     {
-        return $this->heldBy($user, PlateStatus::InProgress);
+        return $this->heldBy($user, PlateStatus::InProgress, addedBy: $user);
     }
 
-    public function onHorizonOf(User $user): static
+    public function onHorizonOf(User $user, ?User $addedBy = null, ?string $reason = null): static
     {
-        return $this->heldBy($user, PlateStatus::Upcoming);
+        return $this->heldBy($user, PlateStatus::Upcoming, $addedBy ?? $user, $reason);
     }
 
-    private function heldBy(User $user, PlateStatus $status): static
+    private function heldBy(User $user, PlateStatus $status, User $addedBy, ?string $reason = null): static
     {
-        return $this->hasAttached($user, ['status' => $status, 'added_by_id' => $user->id], 'people');
+        return $this->hasAttached($user, [
+            'status' => $status,
+            'added_by_id' => $addedBy->id,
+            'reason' => $reason,
+        ], 'people');
     }
 }

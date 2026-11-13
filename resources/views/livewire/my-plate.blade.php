@@ -19,6 +19,12 @@
                             @if ($workItem->summary())
                                 <flux:text class="mt-1">{{ $workItem->summary() }}</flux:text>
                             @endif
+                            @if ($workItem->pivot->wasAddedBySomeoneElse())
+                                <flux:text class="mt-1">
+                                    {{ $workItem->pivot->addedByLine() }}
+                                    <flux:link href="{{ $workItem->wutLink() }}" aria-label="Wut? Ask {{ $workItem->pivot->addedBy->full_name }} why you were added to {{ $workItem->title }}">Wut?</flux:link>
+                                </flux:text>
+                            @endif
                             @if ($workItem->colleaguesOf(auth()->user())->isNotEmpty())
                                 <flux:text class="mt-1">With {{ $workItem->colleaguesOf(auth()->user())->pluck('full_name')->join(', ', ' and ') }}</flux:text>
                             @endif
@@ -45,6 +51,11 @@
 
                                     <flux:menu.item wire:click="moveTo({{ $workItem->id }}, '{{ $otherSection->value }}')">{{ $otherSection->moveLabel() }}</flux:menu.item>
                                 @endforeach
+
+                                @if ($workItem->pivot->wasAddedBySomeoneElse())
+                                    <flux:menu.separator />
+                                    <flux:menu.item icon="x-mark" wire:click="takeMeOff({{ $workItem->id }})">Take me off this</flux:menu.item>
+                                @endif
                             </flux:menu>
                         </flux:dropdown>
                     </li>
