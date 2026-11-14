@@ -78,12 +78,15 @@ test('the owner cannot take themselves off, but the previous owner can once some
 
     Livewire::actingAs($newOwner)
         ->test(MyPlate::class)
+        ->call('pick', $workItem->id)
+        ->assertSee('Back to all work items')
         ->assertDontSee('Take me off this')
         ->call('chooseToTakeOff', $workItem->id, $newOwner->id)
         ->assertForbidden();
 
     Livewire::actingAs($previousOwner)
         ->test(MyPlate::class)
+        ->call('pick', $workItem->id)
         ->assertSee('Take me off this')
         ->call('chooseToTakeOff', $workItem->id, $previousOwner->id)
         ->call('takeOff')
@@ -128,7 +131,10 @@ test('the page marks the owner of a shared work item and offers to take over onl
         ->assertSee('With '.$owner->full_name.' (owner) and '.$alsoOnIt->full_name)
         ->assertSee('With '.$alsoOnIt->full_name)
         ->assertDontSee($alsoOnIt->full_name.' (owner)')
+        ->call('pick', $theirs->id)
         ->assertSee('Take this over')
         ->assertSeeHtml('wire:click="takeOver('.$theirs->id.')"')
-        ->assertDontSeeHtml('wire:click="takeOver('.$mine->id.')"');
+        ->call('pick', $mine->id)
+        ->assertSee('Back to all work items')
+        ->assertDontSee('Take this over');
 });

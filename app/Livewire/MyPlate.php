@@ -191,6 +191,13 @@ class MyPlate extends Component
         $this->pickedId = $this->myWorkItem($workItemId)->id;
     }
 
+    public function openPaletteFor(int $workItemId): void
+    {
+        $this->pick($workItemId);
+
+        Flux::modal('palette')->show();
+    }
+
     public function unpick(): void
     {
         $this->reset('pickedId');

@@ -258,6 +258,8 @@ test('a person cannot take themselves off a work item they own', function () {
 
     Livewire::actingAs($user)
         ->test(MyPlate::class)
+        ->call('pick', $myOwn->id)
+        ->assertSee('Back to all work items')
         ->assertDontSee('Take me off this')
         ->call('chooseToTakeOff', $myOwn->id, $user->id)
         ->assertForbidden();

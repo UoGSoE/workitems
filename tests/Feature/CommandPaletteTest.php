@@ -65,3 +65,21 @@ test('a work item I am not on cannot be picked in the palette', function () {
     expect(fn () => $page->set('pickedId', $onColleaguesPlate->id))->toThrow(CannotUpdateLockedPropertyException::class);
     $page->assertDontSee('Replace the storage array');
 });
+
+test('the button on each row opens the palette on that work item, and is the only control on the row', function () {
+    $user = User::factory()->create();
+    $workItem = WorkItem::factory()->onPlateOf($user)->create();
+    $anotherWorkItem = WorkItem::factory()->onPlateOf($user)->create();
+
+    Livewire::actingAs($user)
+        ->test(MyPlate::class)
+        ->assertSeeHtml('wire:click="openPaletteFor('.$workItem->id.')"')
+        ->assertSeeHtml('wire:click="openPaletteFor('.$anotherWorkItem->id.')"')
+        ->assertDontSeeHtml('wire:click="moveTo(')
+        ->assertDontSeeHtml('wire:click="edit(')
+        ->call('openPaletteFor', $workItem->id)
+        ->assertSet('pickedId', $workItem->id)
+        ->assertDispatched('modal-show', name: 'palette')
+        ->assertSeeHtml('wire:click="moveTo('.$workItem->id.', \'done\')"')
+        ->assertDontSeeHtml('wire:click="moveTo('.$anotherWorkItem->id.',');
+});

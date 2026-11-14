@@ -136,6 +136,7 @@ test('the page offers to take off me or anyone I added, and says who will be ema
 
     Livewire::actingAs($user)
         ->test(MyPlate::class)
+        ->call('pick', $workItem->id)
         ->assertSee('Take me off this')
         ->assertSee('Take '.$addedByMe->full_name.' off this')
         ->assertDontSee('Take '.$addedBySomeoneElse->full_name.' off this')

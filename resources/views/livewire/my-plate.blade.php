@@ -36,40 +36,7 @@
                             @endif
                         </div>
 
-                        @if ($section !== $done)
-                            <flux:button
-                                size="sm"
-                                wire:click="moveTo({{ $workItem->id }}, '{{ $done->value }}')"
-                                aria-label="{{ $done->moveLabel() }}: {{ $workItem->title }}"
-                            >{{ $done->moveLabel() }}</flux:button>
-                        @endif
-
-                        <flux:dropdown align="end">
-                            <flux:button variant="subtle" size="sm" icon="ellipsis-horizontal" aria-label="More options for {{ $workItem->title }}" />
-
-                            <flux:menu>
-                                <flux:menu.item icon="pencil-square" wire:click="edit({{ $workItem->id }})">Details</flux:menu.item>
-                                <flux:menu.item icon="user-plus" wire:click="choosePersonFor({{ $workItem->id }})">Add someone</flux:menu.item>
-                                @if ($workItem->owner->isNot(auth()->user()))
-                                    <flux:menu.item icon="hand-raised" wire:click="takeOver({{ $workItem->id }})">Take this over</flux:menu.item>
-                                @endif
-                                <flux:menu.separator />
-
-                                @foreach ($sections as $otherSection)
-                                    @continue($otherSection === $section || $otherSection === $done)
-
-                                    <flux:menu.item wire:click="moveTo({{ $workItem->id }}, '{{ $otherSection->value }}')">{{ $otherSection->moveLabel() }}</flux:menu.item>
-                                @endforeach
-
-                                @if ($workItem->peopleWhoCanBeTakenOffBy(auth()->user())->isNotEmpty())
-                                    <flux:menu.separator />
-
-                                    @foreach ($workItem->peopleWhoCanBeTakenOffBy(auth()->user()) as $person)
-                                        <flux:menu.item icon="x-mark" wire:click="chooseToTakeOff({{ $workItem->id }}, {{ $person->id }})">Take {{ $person->nameAsSeenBy(auth()->user()) }} off this</flux:menu.item>
-                                    @endforeach
-                                @endif
-                            </flux:menu>
-                        </flux:dropdown>
+                        <flux:button variant="subtle" size="sm" icon="ellipsis-horizontal" wire:click="openPaletteFor({{ $workItem->id }})" aria-label="What to do with {{ $workItem->title }}" />
                     </li>
                 @endforeach
             </ul>
@@ -175,7 +142,8 @@
     <flux:modal name="palette" variant="bare" class="w-full max-w-[30rem] my-[12vh] max-h-screen overflow-y-hidden" @close="unpick">
         <flux:command wire:key="palette-{{ $picked?->id ?? 'all' }}" class="border-none shadow-lg inline-flex flex-col max-h-[76vh]" x-init="mouseHasMoved = false" x-on:mouseenter.capture="mouseHasMoved || $event.stopPropagation()">
             @if ($picked)
-                <flux:command.input :placeholder="$picked->title.': do what?'" closable autofocus x-init="$nextTick(() => $el.focus())" />
+                {{-- On a touch screen the actions are tapped, so the on-screen keyboard is kept out of the way. --}}
+                <flux:command.input :placeholder="$picked->title.': do what?'" closable autofocus x-init="$nextTick(() => $el.focus())" x-bind:inputmode="window.matchMedia('(pointer: coarse)').matches ? 'none' : null" />
 
                 <flux:command.items>
                     @foreach ($sections->sortByDesc(fn ($section) => $section === $done) as $section)
