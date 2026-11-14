@@ -252,7 +252,7 @@ test('a person can take themselves off a work item a colleague added them to', f
         ->and($stillMine->fresh()->people()->count())->toBe(2);
 });
 
-test('a person cannot take themselves off a work item they added themselves', function () {
+test('a person cannot take themselves off a work item they own', function () {
     $user = User::factory()->create();
     $myOwn = WorkItem::factory()->onPlateOf($user)->create();
 

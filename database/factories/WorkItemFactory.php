@@ -21,6 +21,7 @@ class WorkItemFactory extends Factory
     public function definition(): array
     {
         return [
+            'owner_id' => null,
             'title' => fake()->unique()->sentence(4),
             'status' => WorkItemStatus::Open,
         ];
@@ -36,6 +37,11 @@ class WorkItemFactory extends Factory
         return $this->state(['status' => WorkItemStatus::Done]);
     }
 
+    public function ownedBy(User $user): static
+    {
+        return $this->state(['owner_id' => $user->id]);
+    }
+
     public function onPlateOf(User $user): static
     {
         return $this->heldBy($user, PlateStatus::InProgress, addedBy: $user);
@@ -46,9 +52,12 @@ class WorkItemFactory extends Factory
         return $this->heldBy($user, PlateStatus::Upcoming, $addedBy ?? $user, $reason);
     }
 
+    /**
+     * The first person put on a work item owns it, unless ownedBy() has said otherwise.
+     */
     private function heldBy(User $user, PlateStatus $status, User $addedBy, ?string $reason = null): static
     {
-        return $this->hasAttached($user, [
+        return $this->state(fn (array $attributes) => ['owner_id' => $attributes['owner_id'] ?? $user->id])->hasAttached($user, [
             'status' => $status,
             'added_by_id' => $addedBy->id,
             'reason' => $reason,

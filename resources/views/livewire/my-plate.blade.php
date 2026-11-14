@@ -26,7 +26,7 @@
                                 </flux:text>
                             @endif
                             @if ($workItem->colleaguesOf(auth()->user())->isNotEmpty())
-                                <flux:text class="mt-1">With {{ $workItem->colleaguesOf(auth()->user())->pluck('full_name')->join(', ', ' and ') }}</flux:text>
+                                <flux:text class="mt-1">{{ $workItem->withLine(auth()->user()) }}</flux:text>
                             @endif
                         </div>
 
@@ -44,6 +44,9 @@
                             <flux:menu>
                                 <flux:menu.item icon="pencil-square" wire:click="edit({{ $workItem->id }})">Details</flux:menu.item>
                                 <flux:menu.item icon="user-plus" wire:click="choosePersonFor({{ $workItem->id }})">Add someone</flux:menu.item>
+                                @if ($workItem->owner->isNot(auth()->user()))
+                                    <flux:menu.item icon="hand-raised" wire:click="takeOver({{ $workItem->id }})">Take this over</flux:menu.item>
+                                @endif
                                 <flux:menu.separator />
 
                                 @foreach ($sections as $otherSection)

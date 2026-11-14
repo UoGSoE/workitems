@@ -34,18 +34,6 @@ class UserWorkItem extends Pivot
     }
 
     /**
-     * People can take themselves off work they were added to, and take off anyone they added.
-     */
-    public function canBeTakenOffBy(User $user): bool
-    {
-        if ($this->user_id === $user->id) {
-            return $this->wasAddedBySomeoneElse();
-        }
-
-        return $this->added_by_id === $user->id;
-    }
-
-    /**
      * Who added this person and why, eg "Added by Jenny MacAdmin: you know how the backups work".
      */
     public function addedByLine(): string

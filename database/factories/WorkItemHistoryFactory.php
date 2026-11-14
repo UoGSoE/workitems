@@ -20,7 +20,7 @@ class WorkItemHistoryFactory extends Factory
     public function definition(): array
     {
         return [
-            'work_item_id' => WorkItem::factory(),
+            'work_item_id' => fn () => WorkItem::factory()->onPlateOf(User::factory()->create()),
             'user_id' => User::factory(),
             'description' => 'created it',
         ];

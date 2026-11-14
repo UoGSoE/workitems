@@ -47,7 +47,7 @@ class MyPlate extends Component
 
     public function render()
     {
-        $workItems = auth()->user()->workItems()->with('people')->get()->sortByDesc('id');
+        $workItems = auth()->user()->workItems()->with('people', 'owner')->get()->sortByDesc('id');
         $takingOffFrom = WorkItem::find($this->takingOffFromId);
         $personToTakeOff = $takingOffFrom?->people->find($this->takingOffPersonId);
 
@@ -70,7 +70,7 @@ class MyPlate extends Component
         $this->validate(['whatsOn' => 'required|string|max:255']);
 
         $workItem = auth()->user()->workItems()->create(
-            ['title' => $this->whatsOn, 'status' => WorkItemStatus::Open],
+            ['owner_id' => auth()->id(), 'title' => $this->whatsOn, 'status' => WorkItemStatus::Open],
             ['status' => PlateStatus::InProgress, 'added_by_id' => auth()->id()],
         );
 
@@ -151,7 +151,7 @@ class MyPlate extends Component
     {
         $workItem = $this->myWorkItem($workItemId);
 
-        abort_unless($workItem->people()->findOrFail($personId)->pivot->canBeTakenOffBy(auth()->user()), 403);
+        abort_unless($workItem->allowsTakingOff($workItem->people()->findOrFail($personId), auth()->user()), 403);
 
         $this->takingOffFromId = $workItem->id;
         $this->takingOffPersonId = $personId;
@@ -167,11 +167,20 @@ class MyPlate extends Component
         $workItem = $this->myWorkItem($this->takingOffFromId);
         $person = $workItem->people()->findOrFail($this->takingOffPersonId);
 
-        abort_unless($person->pivot->canBeTakenOffBy(auth()->user()), 403);
+        abort_unless($workItem->allowsTakingOff($person, auth()->user()), 403);
 
         $workItem->takeOff($person, takenOffBy: auth()->user(), message: $this->message ?: null);
 
         Flux::modal('take-off')->close();
+    }
+
+    public function takeOver(int $workItemId): void
+    {
+        $workItem = $this->myWorkItem($workItemId);
+
+        abort_if($workItem->owner->is(auth()->user()), 403);
+
+        $workItem->takeOver(auth()->user());
     }
 
     private function myWorkItem(int $workItemId): WorkItem

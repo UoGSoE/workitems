@@ -13,6 +13,7 @@ return new class extends Migration
     {
         Schema::create('work_items', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('owner_id')->constrained('users');
             $table->string('title');
             $table->text('notes')->nullable();
             $table->string('status');
