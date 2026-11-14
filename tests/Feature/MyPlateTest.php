@@ -241,7 +241,10 @@ test('a person can take themselves off a work item a colleague added them to', f
 
     Livewire::actingAs($user)
         ->test(MyPlate::class)
-        ->call('takeMeOff', $notForMe->id)
+        ->call('chooseToTakeOff', $notForMe->id, $user->id)
+        ->assertSee($notForMe->title)
+        ->call('takeOff')
+        ->assertHasNoErrors()
         ->assertDontSee($notForMe->title)
         ->assertSee($stillMine->title);
 
@@ -256,7 +259,7 @@ test('a person cannot take themselves off a work item they added themselves', fu
     Livewire::actingAs($user)
         ->test(MyPlate::class)
         ->assertDontSee('Take me off this')
-        ->call('takeMeOff', $myOwn->id)
+        ->call('chooseToTakeOff', $myOwn->id, $user->id)
         ->assertForbidden();
 
     expect($myOwn->fresh()->people->modelKeys())->toBe([$user->id]);

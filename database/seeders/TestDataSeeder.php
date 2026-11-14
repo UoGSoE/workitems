@@ -59,15 +59,19 @@ class TestDataSeeder extends Seeder
 
     private function createSharedWorkItems(User $adminUser, User $standardUser): void
     {
-        WorkItem::factory()
+        $certificates = WorkItem::factory()
             ->onPlateOf($adminUser)
             ->onHorizonOf($standardUser, addedBy: $adminUser, reason: 'You know how the DNS challenges are set up')
             ->create(['title' => 'Certificates for the new research cluster', 'effort_days' => 2, 'elapsed_days' => 10]);
+        $certificates->addHistory($adminUser, 'created it');
+        $certificates->addHistory($adminUser, 'added '.$standardUser->full_name);
 
-        WorkItem::factory()
+        $disks = WorkItem::factory()
             ->onPlateOf($standardUser)
             ->onHorizonOf($adminUser, addedBy: $standardUser, reason: 'You hold the purchasing login')
             ->create(['title' => 'Order the replacement disks', 'effort_days' => 1]);
+        $disks->addHistory($standardUser, 'created it');
+        $disks->addHistory($standardUser, 'added '.$adminUser->full_name);
     }
 
     private function createColleaguesWithPlates(): void

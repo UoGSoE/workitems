@@ -57,4 +57,12 @@ class User extends Authenticatable
     {
         return Attribute::get(fn () => $this->forenames.' '.$this->surname);
     }
+
+    /**
+     * How this person is named to whoever is reading: "me" for themselves, otherwise their full name.
+     */
+    public function nameAsSeenBy(User $reader): string
+    {
+        return $this->is($reader) ? 'me' : $this->full_name;
+    }
 }

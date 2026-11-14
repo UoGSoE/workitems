@@ -5,12 +5,15 @@ namespace App\Models;
 use App\Enums\PlateSection;
 use App\Enums\PlateStatus;
 use App\Enums\WorkItemStatus;
+use App\Events\PersonTakenOffWorkItem;
+use App\Events\WorkItemUpdated;
 use Database\Factories\WorkItemFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
 class WorkItem extends Model
@@ -47,6 +50,14 @@ class WorkItem extends Model
             ->using(UserWorkItem::class)
             ->withPivot('status', 'added_by_id', 'reason')
             ->withTimestamps();
+    }
+
+    /**
+     * Who did what to this work item, oldest first.
+     */
+    public function history(): HasMany
+    {
+        return $this->hasMany(WorkItemHistory::class);
     }
 
     /**
@@ -90,6 +101,14 @@ class WorkItem extends Model
     }
 
     /**
+     * Add a line to this work item's history, eg "created it".
+     */
+    public function addHistory(User $who, string $what): void
+    {
+        $this->history()->create(['user_id' => $who->id, 'description' => $what]);
+    }
+
+    /**
      * Put this work item on someone's horizon. They pull it onto their own plate when they start on it.
      */
     public function addPerson(User $person, User $addedBy, ?string $reason = null): void
@@ -99,6 +118,51 @@ class WorkItem extends Model
             'added_by_id' => $addedBy->id,
             'reason' => $reason,
         ]);
+
+        event(new WorkItemUpdated($this, $addedBy, 'added '.$person->full_name));
+    }
+
+    /**
+     * The people on this work item the given person is allowed to take off it.
+     *
+     * @return Collection<int, User>
+     */
+    public function peopleWhoCanBeTakenOffBy(User $user): Collection
+    {
+        return $this->people->filter(fn (User $person) => $person->pivot->canBeTakenOffBy($user));
+    }
+
+    /**
+     * Who gets told when someone comes off this work item: whoever added them
+     * if they are leaving, or the person themselves if they are being taken off.
+     */
+    public function whoHearsAboutTakingOff(User $person, User $takenOffBy): User
+    {
+        if ($person->is($takenOffBy)) {
+            return $this->people->find($person)->pivot->addedBy;
+        }
+
+        return $person;
+    }
+
+    /**
+     * Take someone off this work item, and let the other person involved know.
+     */
+    public function takeOff(User $person, User $takenOffBy, ?string $message = null): void
+    {
+        $tell = $this->whoHearsAboutTakingOff($person, $takenOffBy);
+
+        $this->people()->detach($person);
+
+        if ($person->is($takenOffBy)) {
+            event(new WorkItemUpdated($this, $person, 'took themselves off it'));
+            event(new PersonTakenOffWorkItem($this, $person, $tell, whatHappened: 'removed themselves from', message: $message));
+
+            return;
+        }
+
+        event(new WorkItemUpdated($this, $takenOffBy, 'took '.$person->full_name.' off it'));
+        event(new PersonTakenOffWorkItem($this, $takenOffBy, $tell, whatHappened: 'took you off', message: $message));
     }
 
     /**
@@ -108,6 +172,10 @@ class WorkItem extends Model
     public function moveTo(PlateSection $section, User $user): void
     {
         $this->update(['status' => $section->workItemStatus()]);
+
+        if ($this->wasChanged('status')) {
+            event(new WorkItemUpdated($this, $user, $this->status->historyLine()));
+        }
 
         if (! $section->plateStatus()) {
             return;

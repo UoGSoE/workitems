@@ -42,7 +42,7 @@
                             <flux:button variant="subtle" size="sm" icon="ellipsis-horizontal" aria-label="More options for {{ $workItem->title }}" />
 
                             <flux:menu>
-                                <flux:menu.item icon="pencil-square" wire:click="edit({{ $workItem->id }})">Edit</flux:menu.item>
+                                <flux:menu.item icon="pencil-square" wire:click="edit({{ $workItem->id }})">Details</flux:menu.item>
                                 <flux:menu.item icon="user-plus" wire:click="choosePersonFor({{ $workItem->id }})">Add someone</flux:menu.item>
                                 <flux:menu.separator />
 
@@ -52,9 +52,12 @@
                                     <flux:menu.item wire:click="moveTo({{ $workItem->id }}, '{{ $otherSection->value }}')">{{ $otherSection->moveLabel() }}</flux:menu.item>
                                 @endforeach
 
-                                @if ($workItem->pivot->wasAddedBySomeoneElse())
+                                @if ($workItem->peopleWhoCanBeTakenOffBy(auth()->user())->isNotEmpty())
                                     <flux:menu.separator />
-                                    <flux:menu.item icon="x-mark" wire:click="takeMeOff({{ $workItem->id }})">Take me off this</flux:menu.item>
+
+                                    @foreach ($workItem->peopleWhoCanBeTakenOffBy(auth()->user()) as $person)
+                                        <flux:menu.item icon="x-mark" wire:click="chooseToTakeOff({{ $workItem->id }}, {{ $person->id }})">Take {{ $person->nameAsSeenBy(auth()->user()) }} off this</flux:menu.item>
+                                    @endforeach
                                 @endif
                             </flux:menu>
                         </flux:dropdown>
@@ -80,6 +83,17 @@
                 <flux:button type="submit" variant="primary">Save</flux:button>
             </div>
         </form>
+
+        @if ($history->isNotEmpty())
+            <flux:separator class="my-8" />
+
+            <flux:heading level="3">History</flux:heading>
+            <ul class="mt-2 space-y-1">
+                @foreach ($history as $line)
+                    <li wire:key="history-{{ $line->id }}"><flux:text>{{ $line->sentence() }}</flux:text></li>
+                @endforeach
+            </ul>
+        @endif
     </flux:modal>
 
     <flux:modal name="add-person" variant="flyout">
@@ -103,5 +117,29 @@
                 <flux:button type="submit" variant="primary">Add</flux:button>
             </div>
         </form>
+    </flux:modal>
+
+    <flux:modal name="take-off" variant="flyout">
+        @if ($personToTakeOff)
+            <form wire:submit="takeOff" class="space-y-6">
+                <div>
+                    <flux:heading size="lg" level="2">Take {{ $personToTakeOff->nameAsSeenBy(auth()->user()) }} off this</flux:heading>
+                    <flux:text class="mt-2">{{ $takingOffFrom->title }}</flux:text>
+                </div>
+
+                <flux:field>
+                    <flux:label>Anything to say?</flux:label>
+                    <flux:textarea wire:model="message" rows="auto" autofocus />
+                    <flux:description>Optional. {{ $whoGetsTold->full_name }} gets an email to let them know, with or without it.</flux:description>
+                    <flux:error name="message" />
+                </flux:field>
+
+                <div class="flex gap-2">
+                    <flux:spacer />
+                    <flux:button x-on:click="$flux.modal('take-off').close()">Cancel</flux:button>
+                    <flux:button type="submit" variant="primary">Take {{ $personToTakeOff->nameAsSeenBy(auth()->user()) }} off</flux:button>
+                </div>
+            </form>
+        @endif
     </flux:modal>
 </div>

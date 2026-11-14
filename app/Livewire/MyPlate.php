@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Enums\PlateSection;
 use App\Enums\PlateStatus;
 use App\Enums\WorkItemStatus;
+use App\Events\WorkItemUpdated;
 use App\Models\User;
 use App\Models\WorkItem;
 use Flux\Flux;
@@ -36,13 +37,27 @@ class MyPlate extends Component
 
     public $reason = '';
 
+    #[Locked]
+    public $takingOffFromId = null;
+
+    #[Locked]
+    public $takingOffPersonId = null;
+
+    public $message = '';
+
     public function render()
     {
         $workItems = auth()->user()->workItems()->with('people')->get()->sortByDesc('id');
+        $takingOffFrom = WorkItem::find($this->takingOffFromId);
+        $personToTakeOff = $takingOffFrom?->people->find($this->takingOffPersonId);
 
         return view('livewire.my-plate', [
+            'takingOffFrom' => $takingOffFrom,
+            'personToTakeOff' => $personToTakeOff,
+            'whoGetsTold' => $personToTakeOff ? $takingOffFrom->whoHearsAboutTakingOff($personToTakeOff, auth()->user()) : null,
             'sections' => PlateSection::cases(),
             'done' => PlateSection::Done,
+            'history' => WorkItem::find($this->editingId)?->history()->with('user')->oldest()->get() ?? collect(),
             'peopleToAdd' => WorkItem::find($this->addingToId)?->peopleWhoCouldBeAdded()->get() ?? collect(),
             'workItemsBySection' => $workItems->groupBy(
                 fn (WorkItem $workItem) => PlateSection::of($workItem->status, $workItem->pivot->status)->value
@@ -54,10 +69,12 @@ class MyPlate extends Component
     {
         $this->validate(['whatsOn' => 'required|string|max:255']);
 
-        auth()->user()->workItems()->create(
+        $workItem = auth()->user()->workItems()->create(
             ['title' => $this->whatsOn, 'status' => WorkItemStatus::Open],
             ['status' => PlateStatus::InProgress, 'added_by_id' => auth()->id()],
         );
+
+        event(new WorkItemUpdated($workItem, auth()->user(), 'created it'));
 
         $this->reset('whatsOn');
     }
@@ -91,13 +108,19 @@ class MyPlate extends Component
             'dueOn' => 'nullable|date',
         ]);
 
-        $this->myWorkItem($this->editingId)->update([
+        $workItem = $this->myWorkItem($this->editingId);
+
+        $workItem->update([
             'title' => $this->title,
             'notes' => $this->notes ?: null,
             'effort_days' => $this->effortDays ?: null,
             'elapsed_days' => $this->elapsedDays ?: null,
             'due_on' => $this->dueOn ?: null,
         ]);
+
+        if ($workItem->wasChanged()) {
+            event(new WorkItemUpdated($workItem, auth()->user(), 'changed the details'));
+        }
 
         Flux::modal('edit-work-item')->close();
     }
@@ -124,13 +147,31 @@ class MyPlate extends Component
         Flux::modal('add-person')->close();
     }
 
-    public function takeMeOff(int $workItemId): void
+    public function chooseToTakeOff(int $workItemId, int $personId): void
     {
         $workItem = $this->myWorkItem($workItemId);
 
-        abort_unless($workItem->pivot->wasAddedBySomeoneElse(), 403);
+        abort_unless($workItem->people()->findOrFail($personId)->pivot->canBeTakenOffBy(auth()->user()), 403);
 
-        $workItem->people()->detach(auth()->user());
+        $this->takingOffFromId = $workItem->id;
+        $this->takingOffPersonId = $personId;
+        $this->reset('message');
+
+        Flux::modal('take-off')->show();
+    }
+
+    public function takeOff(): void
+    {
+        $this->validate(['message' => 'nullable|string|max:1000']);
+
+        $workItem = $this->myWorkItem($this->takingOffFromId);
+        $person = $workItem->people()->findOrFail($this->takingOffPersonId);
+
+        abort_unless($person->pivot->canBeTakenOffBy(auth()->user()), 403);
+
+        $workItem->takeOff($person, takenOffBy: auth()->user(), message: $this->message ?: null);
+
+        Flux::modal('take-off')->close();
     }
 
     private function myWorkItem(int $workItemId): WorkItem
