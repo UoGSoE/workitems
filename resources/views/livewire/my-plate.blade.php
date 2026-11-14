@@ -1,14 +1,22 @@
 <div class="mx-auto max-w-3xl">
     <flux:heading level="1" class="sr-only">My work</flux:heading>
 
-    <form wire:submit="add">
-        <flux:input wire:model="whatsOn" id="whats-on" label="What's on?" description:trailing="Press Enter to put it on your plate." autofocus />
+    <form wire:submit="add" class="space-y-2">
+        <flux:label>What's on?</flux:label>
+        <flux:input wire:model="whatsOn" id="whats-on" autofocus>
+            <x-slot name="iconTrailing">
+                <flux:button type="submit" size="sm" variant="subtle" icon="plus-circle" class="-mr-1" />
+            </x-slot>
+        </flux:input>
+
+        <flux:description class="flex flex-row justify-end">
+            <flux:modal.trigger name="palette" shortcut="cmd.k" x-on:keydown.ctrl.k.document="$event.preventDefault(); $dispatch('modal-show', { name: 'palette' })">
+                <flux:button size="sm" variant="subtle" kbd="⌘K">Open command palette.</flux:button>
+            </flux:modal.trigger>
+        </flux:description>
     </form>
 
     <div class="mt-2 flex justify-end">
-        <flux:modal.trigger name="palette" shortcut="cmd.k" x-on:keydown.ctrl.k.document="$event.preventDefault(); $dispatch('modal-show', { name: 'palette' })">
-            <flux:button size="sm" variant="subtle" icon="magnifying-glass" kbd="⌘K">Find a work item</flux:button>
-        </flux:modal.trigger>
     </div>
 
     @foreach ($sections as $section)
