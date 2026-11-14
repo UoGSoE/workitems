@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\PlateSection;
 use App\Enums\PlateStatus;
 use App\Enums\WorkItemStatus;
+use App\Events\PersonAddedToWorkItem;
 use App\Events\PersonTakenOffWorkItem;
 use App\Events\WorkItemTakenOver;
 use App\Events\WorkItemUpdated;
@@ -138,7 +139,7 @@ class WorkItem extends Model
     }
 
     /**
-     * Put this work item on someone's horizon. They pull it onto their own plate when they start on it.
+     * Put this work item on someone's horizon and tell them. They pull it onto their own plate when they start on it.
      */
     public function addPerson(User $person, User $addedBy, ?string $reason = null): void
     {
@@ -149,6 +150,7 @@ class WorkItem extends Model
         ]);
 
         event(new WorkItemUpdated($this, $addedBy, 'added '.$person->full_name));
+        event(new PersonAddedToWorkItem($this, $person, $addedBy, $reason));
     }
 
     /**
