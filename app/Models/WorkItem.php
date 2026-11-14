@@ -84,6 +84,14 @@ class WorkItem extends Model
     }
 
     /**
+     * Where this work item sits on the page of the person it was loaded for.
+     */
+    public function section(): PlateSection
+    {
+        return PlateSection::of($this->status, $this->pivot->status);
+    }
+
+    /**
      * A link that starts an email to whoever added the person this work item was loaded for, asking why.
      */
     public function wutLink(): string

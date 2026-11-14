@@ -45,23 +45,26 @@ class MyPlate extends Component
 
     public $message = '';
 
+    #[Locked]
+    public $pickedId = null;
+
     public function render()
     {
-        $workItems = auth()->user()->workItems()->with('people', 'owner')->get()->sortByDesc('id');
-        $takingOffFrom = WorkItem::find($this->takingOffFromId);
+        $workItems = auth()->user()->workItemsWithEveryoneInvolved();
+        $takingOffFrom = $workItems->find($this->takingOffFromId);
         $personToTakeOff = $takingOffFrom?->people->find($this->takingOffPersonId);
 
         return view('livewire.my-plate', [
             'takingOffFrom' => $takingOffFrom,
             'personToTakeOff' => $personToTakeOff,
             'whoGetsTold' => $personToTakeOff ? $takingOffFrom->whoHearsAboutTakingOff($personToTakeOff, auth()->user()) : null,
-            'sections' => PlateSection::cases(),
+            'workItems' => $workItems,
+            'picked' => $workItems->find($this->pickedId),
+            'sections' => collect(PlateSection::cases()),
             'done' => PlateSection::Done,
-            'history' => WorkItem::find($this->editingId)?->history()->with('user')->oldest()->get() ?? collect(),
-            'peopleToAdd' => WorkItem::find($this->addingToId)?->peopleWhoCouldBeAdded()->get() ?? collect(),
-            'workItemsBySection' => $workItems->groupBy(
-                fn (WorkItem $workItem) => PlateSection::of($workItem->status, $workItem->pivot->status)->value
-            ),
+            'history' => $workItems->find($this->editingId)?->history()->with('user')->oldest()->get() ?? collect(),
+            'peopleToAdd' => $workItems->find($this->addingToId)?->peopleWhoCouldBeAdded()->get() ?? collect(),
+            'workItemsBySection' => $workItems->groupBy(fn (WorkItem $workItem) => $workItem->section()->value),
         ]);
     }
 
@@ -181,6 +184,16 @@ class MyPlate extends Component
         abort_if($workItem->owner->is(auth()->user()), 403);
 
         $workItem->takeOver(auth()->user());
+    }
+
+    public function pick(int $workItemId): void
+    {
+        $this->pickedId = $this->myWorkItem($workItemId)->id;
+    }
+
+    public function unpick(): void
+    {
+        $this->reset('pickedId');
     }
 
     private function myWorkItem(int $workItemId): WorkItem

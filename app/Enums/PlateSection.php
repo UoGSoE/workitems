@@ -33,6 +33,19 @@ enum PlateSection: string
     }
 
     /**
+     * The icon shown beside the move to this section.
+     */
+    public function moveIcon(): string
+    {
+        return match ($this) {
+            self::MyPlate => 'play',
+            self::Horizon => 'clock',
+            self::Parked => 'pause',
+            self::Done => 'check',
+        };
+    }
+
+    /**
      * The wording for the action that moves a work item to this section.
      */
     public function moveLabel(): string

@@ -361,3 +361,16 @@ test('a work item shows its rough size and by when', function () {
         ->test(MyPlate::class)
         ->assertSee('1 day of work, 3 days elapsed, by 18 Dec 2026');
 });
+
+test('the page takes the same few queries however many shared work items are on it', function (int $howMany) {
+    $user = User::factory()->create();
+    User::factory()->count($howMany)->create()->each(function (User $colleague) use ($user) {
+        WorkItem::factory()->onPlateOf($colleague)->onHorizonOf($user, addedBy: $colleague)->create();
+    });
+
+    $this->expectsDatabaseQueryCount(4);
+
+    Livewire::actingAs($user)
+        ->test(MyPlate::class)
+        ->assertSee('Added by');
+})->with([2, 6]);
