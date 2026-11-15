@@ -1,58 +1,102 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Workitems
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A Laravel app that lets a small IT team keep track of what each person is working on, what's coming up, and who could use a hand.
 
-## About Laravel
+## What it does
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+Each person has their own plate of work items, split into what they're doing now ("my plate"), what's on the horizon, what's parked and what's done. A work item can have several people on it, rough effort and elapsed-time estimates, a start date and a due date, notes, and a history of every change.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+Every work item has a visibility setting. It can be seen by just the people on it (plus whoever they report to), by the team, or by everyone through the "Classifieds" page, which is for work someone would like help with or that someone else might learn from. There is also a secret setting, which works like "just the people on it" but can't be changed once set.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+Team leads get a "My team" page with a timeline of their people's work. From there they can draft new work, hand it to someone, and move work between people. People with leads reporting to them get an overview that rolls up everyone beneath them. People given the "manage people" permission add people, set up teams and leads, and mark leavers. Developers (admins) can do all of that and also impersonate other users to see the app as they do. People are emailed when they are added to a work item, taken off one, or have work moved to them.
 
-## Learning Laravel
+Sign-in is through Keycloak SSO, with a local username and password login available when SSO is turned off.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+## Prerequisites
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+- [Lando](https://lando.dev/) for local development (it provides PHP 8.5, MySQL, Redis, Node and Mailhog)
+- A [Flux UI Pro](https://fluxui.dev/) licence, as the app uses `livewire/flux-pro`
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+## Getting started
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+git clone https://github.com/UoGSoE/workitems.git
+cd workitems
+cp .env.example .env
+lando start
+lando composer install
+lando artisan key:generate
+lando npm run build
+lando mfs
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+`lando mfs` drops the database, runs the migrations and seeds it with `TestDataSeeder`. That creates a department of about thirty people, five of whom you can sign in as, all with the password `secret`:
+
+- `member2x` does the work
+- `line2x` leads a small team
+- `lead2x` has leads reporting to them
+- `manager2x` is at the top
+- `admin2x` is a developer of the app (an admin)
+
+Other Lando commands:
+
+```bash
+lando artisan ...    # run artisan commands
+lando composer ...   # run composer
+lando npm ...        # run npm
+lando npmd           # run the Vite dev server
+lando horizon        # run the queue worker
+```
+
+Emails are caught by Mailhog; `lando info` shows its address.
+
+## Configuration
+
+Beyond the usual Laravel settings, `.env` has:
+
+- `SSO_ENABLED` and the `KEYCLOAK_*` values for Keycloak sign-in. With `SSO_ENABLED=false` you sign in with a username and password.
+- `LLM_MODEL_NAME`, `AZURE_OPENAI_API_KEY` and `AZURE_OPENAI_ENDPOINT` (and optionally `LLM_PROVIDER`, which defaults to `azure`), for the experimental "brain dump" agent (see below).
+
+## Setting up a real install
+
+On a fresh database with nobody in it, create the first account and then sign in to add everyone else from the People page:
+
+```bash
+php artisan workitems:bootstrap-user {username} {email} {surname} {forenames}
+```
+
+To make an existing user an admin:
+
+```bash
+php artisan workitems:make-admin {email}
+```
+
+## Brain dump (experimental)
+
+`app/Ai/Agents/BrainDump.php` turns a free-text description of everything on someone's plate into draft work items. It isn't wired into the UI yet, but you can try it from the command line with a text file:
+
+```bash
+php artisan app:try-brain-dump notes.txt --provider=ollama --model=gemma4:e4b
+```
+
+## Running tests
+
+The test suite uses Pest and an in-memory SQLite database, so there's nothing to migrate first.
+
+```bash
+lando test
+```
+
+Or without Lando:
+
+```bash
+php artisan test
+```
 
 ## Contributing
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+Follow the getting started steps above and run the tests before opening a pull request.
 
-## Code of Conduct
+## Licence
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+MIT. See [LICENSE](LICENSE).
