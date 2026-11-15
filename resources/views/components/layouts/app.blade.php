@@ -24,10 +24,13 @@
                 </flux:sidebar.header>
                 <flux:sidebar.nav>
                     <flux:sidebar.item icon="home" href="/" wire:navigate>Home</flux:sidebar.item>
-                    @if (auth()->user()->reports()->isNotEmpty())
+                    @if (auth()->user()->reports->isNotEmpty())
                         <flux:sidebar.item icon="calendar-days" href="{{ route('my-team') }}" wire:navigate>My team</flux:sidebar.item>
                     @endif
-                    <flux:sidebar.item icon="hand-raised" href="{{ route('looking-for-a-hand') }}" wire:navigate>Looking for a hand</flux:sidebar.item>
+                    @if (auth()->user()->hasLeadsReportingToThem())
+                        <flux:sidebar.item icon="presentation-chart-bar" href="{{ route('overview') }}" wire:navigate>Overview</flux:sidebar.item>
+                    @endif
+                    <flux:sidebar.item icon="hand-raised" href="{{ route('looking-for-a-hand') }}" wire:navigate>Classifieds</flux:sidebar.item>
                     <flux:sidebar.item icon="plus-circle" href="" wire:navigate>New</flux:sidebar.item>
                     <flux:separator class="my-2" />
                     <flux:sidebar.item badge="3" icon="list-bullet" href="" wire:navigate>List things</flux:sidebar.item>

@@ -26,7 +26,7 @@ test('when someone goes, a work item they owned passes to the chosen person and 
         ->and($workItem->people->modelKeys())->toBe([$takesOver->id])
         ->and($workItem->people->first()->pivot->status)->toBe(PlateStatus::Upcoming)
         ->and($workItem->history()->orderBy('id')->pluck('description')->all())->toBe(['added Jenny McUser', 'gave it to Jenny McUser from Jenny McLeaver'])
-        ->and($workItem->history->every(fn ($line) => $line->user->is($admin)))->toBeTrue();
+        ->and($workItem->history->load('user')->every(fn ($line) => $line->user->is($admin)))->toBeTrue();
     Mail::assertQueuedCount(1);
     Mail::assertQueued(WorkItemsMovedMail::class, fn (WorkItemsMovedMail $mail) => $mail->hasTo($takesOver->email)
         && str($mail->render())->containsAll([$admin->full_name.' gave you work that Jenny McLeaver owned', 'Replace the storage array', 'Update the samba servers']));

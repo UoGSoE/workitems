@@ -31,6 +31,7 @@
         "laravel/pint": "^1.27",
         "mockery/mockery": "^1.6",
         "nunomaduro/collision": "^8.6",
+        "ohffs/counts-database-queries-trait": "^1.1",
         "pestphp/pest": "^5.3",
         "pestphp/pest-plugin-laravel": "^5.0",
         "uogsoe/laravel-init": "^1.1"

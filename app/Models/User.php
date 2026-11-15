@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Lab404\Impersonate\Models\Impersonate;
@@ -71,6 +72,14 @@ class User extends Authenticatable
     }
 
     /**
+     * This person's open work, in the order it starts.
+     */
+    public function openWorkItems(): BelongsToMany
+    {
+        return $this->workItems()->where('work_items.status', WorkItemStatus::Open)->orderBy('starts_on')->orderBy('work_items.id');
+    }
+
+    /**
      * The team this person is a member of. They report to its lead.
      */
     public function team(): BelongsTo
@@ -84,6 +93,14 @@ class User extends Authenticatable
     public function ledTeams(): HasMany
     {
         return $this->hasMany(Team::class, 'lead_id');
+    }
+
+    /**
+     * The people who report to this person: the members of every team they lead.
+     */
+    public function reports(): HasManyThrough
+    {
+        return $this->hasManyThrough(User::class, Team::class, 'lead_id', 'team_id')->orderBy('surname');
     }
 
     /**
@@ -115,19 +132,42 @@ class User extends Authenticatable
         return $this->team?->lead;
     }
 
+    public function isLineManagerOf(User $person): bool
+    {
+        return $this->reports->contains($person);
+    }
+
+    public function leadsAnyone(): bool
+    {
+        return $this->reports->isNotEmpty();
+    }
+
     /**
-     * The people who report to this person: the members of every team they lead.
+     * Whether any of the people who report to this person have people of their own. Those who do get the overview.
+     */
+    public function hasLeadsReportingToThem(): bool
+    {
+        return $this->reports->loadMissing('reports')->contains(fn (User $report) => $report->leadsAnyone());
+    }
+
+    /**
+     * Everyone beneath this person, however far down: the people who report to them, the people
+     * who report to those, and so on. Each pass of the loop takes in one more level.
      *
      * @return Collection<int, User>
      */
-    public function reports(): Collection
+    public function everyoneBelow(): Collection
     {
-        return User::whereIn('team_id', $this->ledTeams()->pluck('id'))->orderBy('surname')->get();
-    }
+        $below = new Collection;
+        $level = $this->reports;
 
-    public function isLineManagerOf(User $person): bool
-    {
-        return $person->lineManager()?->is($this) ?? false;
+        while ($level->isNotEmpty()) {
+            $below = $below->merge($level);
+            $nextLevel = $level->loadMissing('reports')->flatMap(fn (User $person) => $person->reports);
+            $level = (new Collection($nextLevel))->except([$this->id, ...$below->modelKeys()]);
+        }
+
+        return $below;
     }
 
     /**
@@ -138,10 +178,8 @@ class User extends Authenticatable
      */
     public function peopleInMyTeam(): Collection
     {
-        $reports = $this->reports();
-
-        if ($reports->isNotEmpty()) {
-            return $reports->push($this);
+        if ($this->reports->isNotEmpty()) {
+            return $this->reports->concat([$this]);
         }
 
         $lead = $this->lineManager();
@@ -150,7 +188,7 @@ class User extends Authenticatable
             return new Collection([$this]);
         }
 
-        return $lead->reports()->push($lead);
+        return $lead->reports->concat([$lead]);
     }
 
     /**
@@ -163,11 +201,12 @@ class User extends Authenticatable
     {
         $lead = $this->lineManager();
 
-        return $this->reports()
-            ->merge($lead?->reports() ?? [])
+        return $this->reports
+            ->merge($lead?->reports ?? [])
             ->push($this)
             ->when($lead, fn (Collection $people) => $people->push($lead))
             ->unique()
+            ->loadMissing('reports', 'team.lead.reports')
             ->filter(fn (User $person) => $person->peopleInMyTeam()->contains($this))
             ->values();
     }

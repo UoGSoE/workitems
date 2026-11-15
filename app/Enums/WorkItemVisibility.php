@@ -17,7 +17,7 @@ enum WorkItemVisibility: string
         return match ($this) {
             self::PeopleOnIt => 'Just the people on it',
             self::Team => 'My team can see it',
-            self::LookingForAHand => 'Looking for a hand (everyone can see it)',
+            self::LookingForAHand => 'In the classifieds (everyone can see it)',
             self::Secret => 'Secret',
         };
     }
@@ -43,7 +43,7 @@ enum WorkItemVisibility: string
         return match ($this) {
             self::PeopleOnIt => 'made it visible to just the people on it',
             self::Team => 'made it visible to their team',
-            self::LookingForAHand => 'made it visible to everyone, looking for a hand',
+            self::LookingForAHand => 'made it visible to everyone, in the classifieds',
             self::Secret => 'made it secret',
         };
     }

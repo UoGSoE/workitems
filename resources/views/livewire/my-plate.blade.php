@@ -74,7 +74,7 @@
                 @endif
 
                 @if ($visibility === $lookingForAHand->value)
-                    <flux:textarea wire:model="blurb" label="Why might someone want to help?" rows="auto" description:trailing="Optional. Everyone sees it on the looking for a hand page. Markdown works for bold, lists and links." />
+                    <flux:textarea wire:model="blurb" label="Why might someone want to help?" rows="auto" description:trailing="Optional. Everyone sees it on the classifieds page. Markdown works for bold, lists and links." />
                 @endif
             @elseif ($editing)
                 <div>

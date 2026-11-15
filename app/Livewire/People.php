@@ -54,7 +54,7 @@ class People extends Component
 
     public function render()
     {
-        $everyone = User::with('team.lead')->orderBy('surname')->orderBy('forenames')->get();
+        $everyone = User::with('team.lead', 'ledTeams')->orderBy('surname')->orderBy('forenames')->get();
         $people = $everyone->reject->hasLeft();
         $leaver = $people->find($this->leavingPersonId);
         $workTheyAreOn = $leaver?->unfinishedWorkItems() ?? collect();
@@ -201,7 +201,7 @@ class People extends Component
 
         $this->validate([
             'giveWorkToId' => [Rule::requiredIf($leaver->ownsUnfinishedWork()), 'nullable', Rule::in($whoCouldTakeOnTheirWork)],
-            'newLeadId' => ['nullable', Rule::in($whoCouldStepIn), Rule::notIn($leaver->reports()->modelKeys())],
+            'newLeadId' => ['nullable', Rule::in($whoCouldStepIn), Rule::notIn($leaver->reports->modelKeys())],
         ]);
 
         $giveWorkTo = $this->giveWorkToId ? User::find($this->giveWorkToId) : null;

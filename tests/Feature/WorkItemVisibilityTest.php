@@ -31,7 +31,7 @@ test('the owner of a work item can change who sees it, and the history says so',
         ->assertHasNoErrors();
 
     expect($workItem->fresh()->visibility)->toBe(WorkItemVisibility::LookingForAHand)
-        ->and($workItem->history()->sole()->description)->toBe('made it visible to everyone, looking for a hand')
+        ->and($workItem->history()->sole()->description)->toBe('made it visible to everyone, in the classifieds')
         ->and($workItem->history()->sole()->user->is($owner))->toBeTrue()
         ->and($untouched->fresh()->visibility)->toBe(WorkItemVisibility::PeopleOnIt)
         ->and($untouched->history)->toBeEmpty();
@@ -92,7 +92,7 @@ test('only the owner is offered the choice of who sees a work item, and not once
     Livewire::actingAs($owner)->test(MyPlate::class)
         ->call('edit', $workItem->id)
         ->assertSeeHtml('wire:model.live="visibility"')
-        ->assertSee('Looking for a hand (everyone can see it)')
+        ->assertSee('In the classifieds (everyone can see it)')
         ->assertDontSee('Secret cannot be undone')
         ->set('visibility', WorkItemVisibility::Secret->value)
         ->assertSee('Secret cannot be undone')
@@ -105,7 +105,7 @@ test('only the owner is offered the choice of who sees a work item, and not once
         ->call('edit', $workItem->id)
         ->assertDontSeeHtml('wire:model.live="visibility"')
         ->assertSee('My team can see it')
-        ->assertDontSee('Looking for a hand (everyone can see it)');
+        ->assertDontSee('In the classifieds (everyone can see it)');
 });
 
 test('a secret work item stays secret, even for its owner and for someone who takes it over', function () {

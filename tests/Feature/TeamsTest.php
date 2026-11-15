@@ -19,10 +19,10 @@ test('the people who report to a lead are the members of every team they lead', 
     $sysadmin = User::factory()->inTeam(Team::factory()->ledBy($lead)->create())->create();
     $inSomeoneElsesTeam = User::factory()->inTeam(Team::factory()->ledBy(User::factory()->create())->create())->create();
 
-    expect($lead->reports()->modelKeys())->toEqualCanonicalizing([$developer->id, $sysadmin->id])
+    expect($lead->reports->modelKeys())->toEqualCanonicalizing([$developer->id, $sysadmin->id])
         ->and($lead->isLineManagerOf($developer))->toBeTrue()
         ->and($lead->isLineManagerOf($inSomeoneElsesTeam))->toBeFalse()
-        ->and($developer->reports())->toBeEmpty();
+        ->and($developer->reports)->toBeEmpty();
 });
 
 test('my team, for someone who leads people, is them and the people who report to them', function () {

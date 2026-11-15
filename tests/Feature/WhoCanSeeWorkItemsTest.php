@@ -105,7 +105,7 @@ test('the policy and the scope agree about every person and every work item in a
     User::factory()->create();
     Team::factory()->ledBy(User::factory()->inTeam($leads->first()->ledTeams->first())->create())->create();
 
-    $everyone = User::all();
+    $everyone = User::with('reports', 'team.lead.reports')->get();
     $everyone->each(function (User $owner, int $position) use ($everyone) {
         $someoneElse = $everyone[($position + 3) % $everyone->count()];
 
@@ -114,7 +114,7 @@ test('the policy and the scope agree about every person and every work item in a
         }
     });
 
-    $disagreements = WorkItem::with('people', 'owner')->get()->crossJoin($everyone)
+    $disagreements = WorkItem::with('people', 'owner.reports', 'owner.team.lead.reports')->get()->crossJoin($everyone)
         ->reject(fn (array $pair) => $pair[1]->can('view', $pair[0]) === WorkItem::visibleTo($pair[1])->whereKey($pair[0]->id)->exists())
         ->map(fn (array $pair) => "{$pair[0]->visibility->value} work item {$pair[0]->id} and person {$pair[1]->id}");
 

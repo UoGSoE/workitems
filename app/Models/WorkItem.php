@@ -85,7 +85,7 @@ class WorkItem extends Model
     {
         $query->where(function (Builder $query) use ($user) {
             $query->whereHas('people', fn (Builder $people) => $people->whereKey($user->id))
-                ->orWhereHas('people', fn (Builder $people) => $people->whereIn('users.team_id', $user->ledTeams()->pluck('id')))
+                ->orWhereHas('people', fn (Builder $people) => $people->whereKey($user->reports->modelKeys()))
                 ->orWhere('visibility', WorkItemVisibility::LookingForAHand)
                 ->orWhere(function (Builder $query) use ($user) {
                     $query->where('visibility', WorkItemVisibility::Team)
@@ -183,6 +183,14 @@ class WorkItem extends Model
     public function isSecret(): bool
     {
         return $this->visibility === WorkItemVisibility::Secret;
+    }
+
+    /**
+     * Whether this is still open on a day after the date it was wanted by.
+     */
+    public function isPastItsByWhenDate(): bool
+    {
+        return $this->status === WorkItemStatus::Open && $this->due_on?->isBefore(today());
     }
 
     /**

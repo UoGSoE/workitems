@@ -1,9 +1,9 @@
 <div class="mx-auto max-w-3xl">
-    <flux:heading size="xl" level="1">Looking for a hand</flux:heading>
+    <flux:heading size="xl" level="1">Classifieds</flux:heading>
     <flux:text class="mt-2">Work that someone would like help with, or that might be a good way to learn something. It comes from every team.</flux:text>
 
     @if ($lookingForAHand->isEmpty())
-        <flux:text class="mt-6">Nothing is looking for a hand just now.</flux:text>
+        <flux:text class="mt-6">Nothing in the classifieds just now.</flux:text>
     @else
         <ul class="mt-6 divide-y divide-zinc-200 dark:divide-zinc-700">
             @foreach ($lookingForAHand as $workItem)

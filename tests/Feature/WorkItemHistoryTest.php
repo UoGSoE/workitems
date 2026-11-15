@@ -53,7 +53,7 @@ test('finishing, parking and reopening are recorded, but a move between my plate
         ->call('moveTo', $onlyShuffled->id, PlateSection::Horizon->value);
 
     expect($workItem->history->pluck('description')->all())->toBe(['marked it done', 'reopened it', 'parked it'])
-        ->and($workItem->history->every(fn ($line) => $line->user->is($user)))->toBeTrue()
+        ->and($workItem->history->load('user')->every(fn ($line) => $line->user->is($user)))->toBeTrue()
         ->and($onlyShuffled->history)->toBeEmpty();
 });
 

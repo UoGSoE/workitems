@@ -3,12 +3,12 @@
 namespace App\Livewire;
 
 use App\Enums\PlateStatus;
-use App\Enums\WorkItemStatus;
 use App\Models\User;
 use App\Models\WorkItem;
 use Flux\Flux;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
@@ -59,7 +59,9 @@ class MyTeam extends Component
         $showing = $this->showingId ? $this->workOfMyPeople()->with('people', 'owner')->find($this->showingId) : null;
         $showingFor = $showing?->people->find($this->showingForId);
 
-        $plans = $this->peopleToPlanFor()->map(fn (User $person) => $this->planFor($person, $thisWeek));
+        $plans = $this->peopleToPlanFor()
+            ->load(['openWorkItems' => fn (BelongsToMany $openWork) => $openWork->visibleTo(auth()->user())->with('people', 'owner')])
+            ->map(fn (User $person) => $this->planFor($person, $thisWeek));
 
         $movingAllFrom = $plans->first(fn (array $plan) => $plan['person']->id === $this->movingAllFromId);
         $movingAllTo = $movingAllFrom ? $this->peopleICanDraftFor()->find($this->moveAllTo[$this->movingAllFromId]) : null;
@@ -81,7 +83,7 @@ class MyTeam extends Component
 
     public function boot(): void
     {
-        abort_if(auth()->user()->reports()->isEmpty(), 403);
+        abort_if(auth()->user()->reports->isEmpty(), 403);
     }
 
     /**
@@ -136,7 +138,7 @@ class MyTeam extends Component
      */
     public function askToMoveAll(int $personId): void
     {
-        $from = auth()->user()->reports()->findOrFail($personId);
+        $from = auth()->user()->reports->findOrFail($personId);
 
         $this->validateWhoGetsEverythingFrom($from);
 
@@ -147,7 +149,7 @@ class MyTeam extends Component
 
     public function moveAll(): void
     {
-        $from = auth()->user()->reports()->findOrFail($this->movingAllFromId);
+        $from = auth()->user()->reports->findOrFail($this->movingAllFromId);
 
         $this->validateWhoGetsEverythingFrom($from);
 
@@ -215,7 +217,7 @@ class MyTeam extends Component
      */
     private function nobodyIsChosenToMoveEverythingTo(): void
     {
-        $this->moveAllTo = array_fill_keys(auth()->user()->reports()->modelKeys(), '');
+        $this->moveAllTo = array_fill_keys(auth()->user()->reports->modelKeys(), '');
     }
 
     /**
@@ -258,7 +260,7 @@ class MyTeam extends Component
      */
     private function peopleICanDraftFor(): EloquentCollection
     {
-        return auth()->user()->reports()->prepend(auth()->user());
+        return (new EloquentCollection([auth()->user()]))->concat(auth()->user()->reports);
     }
 
     /**
@@ -272,7 +274,7 @@ class MyTeam extends Component
             return $this->peopleICanDraftFor();
         }
 
-        return auth()->user()->reports();
+        return auth()->user()->reports;
     }
 
     private function turnDraftIntoWorkOwnedBy(int|string $ownerId): void
@@ -307,13 +309,7 @@ class MyTeam extends Component
      */
     private function planFor(User $person, Carbon $thisWeek): array
     {
-        $openWork = $person->workItems()
-            ->visibleTo(auth()->user())
-            ->where('work_items.status', WorkItemStatus::Open)
-            ->with('people', 'owner')
-            ->orderBy('starts_on')
-            ->orderBy('work_items.id')
-            ->get();
+        $openWork = $person->openWorkItems;
 
         return [
             'person' => $person,

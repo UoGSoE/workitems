@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "1ae90ef4e9bd04f3d3a642397b475e4a",
+    "content-hash": "8168252e40199ac7ef1d83746bcb02bb",
     "packages": [
         {
             "name": "brick/math",
@@ -1200,8 +1200,7 @@
                 "issues": "https://github.com/404labfr/laravel-impersonate/issues",
                 "source": "https://github.com/404labfr/laravel-impersonate/tree/1.7.8"
             },
-            "time": "2026-03-17T15:24:14+00:00",
-            "published-time": "2026-03-17T15:24:31+00:00"
+            "time": "2026-03-17T15:24:14+00:00"
         },
         {
             "name": "laravel/ai",
@@ -1283,8 +1282,7 @@
                 "issues": "https://github.com/laravel/ai/issues",
                 "source": "https://github.com/laravel/ai"
             },
-            "time": "2026-11-09T13:10:36+00:00",
-            "published-time": "2026-11-10T19:25:19+00:00"
+            "time": "2026-11-09T13:10:36+00:00"
         },
         {
             "name": "laravel/framework",
@@ -8756,6 +8754,50 @@
             "time": "2026-11-10T17:06:52+00:00"
         },
         {
+            "name": "ohffs/counts-database-queries-trait",
+            "version": "1.1.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/ohnotnow/counts_database_queries.git",
+                "reference": "f7cb3cedc813898e80f4aacebc20a8e8e91d77dc"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/ohnotnow/counts_database_queries/zipball/f7cb3cedc813898e80f4aacebc20a8e8e91d77dc",
+                "reference": "f7cb3cedc813898e80f4aacebc20a8e8e91d77dc",
+                "shasum": ""
+            },
+            "require": {
+                "illuminate/database": "^7.0|^8.0|^9.0|^10.0|^11.0|^12.0|^13.0"
+            },
+            "require-dev": {
+                "orchestra/testbench": "^11.3",
+                "pestphp/pest": "^5.3"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Ohffs\\CountsDatabaseQueries\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Ohffs",
+                    "email": "ohffsnotnow@gmail.com"
+                }
+            ],
+            "description": "Laravel testing trait to count and track database queries",
+            "support": {
+                "issues": "https://github.com/ohnotnow/counts_database_queries/issues",
+                "source": "https://github.com/ohnotnow/counts_database_queries/tree/1.1.0"
+            },
+            "time": "2026-11-15T20:16:51+00:00"
+        },
+        {
             "name": "pestphp/pest",
             "version": "v5.3.5",
             "source": {
@@ -11562,5 +11604,5 @@
         "php": "^8.3"
     },
     "platform-dev": {},
-    "plugin-api-version": "2.11.0"
+    "plugin-api-version": "2.9.0"
 }

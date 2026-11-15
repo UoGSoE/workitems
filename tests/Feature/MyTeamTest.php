@@ -287,3 +287,15 @@ test('a draft cannot be made real for someone who does not report to the lead', 
     expect(WorkItem::count())->toBe(0);
     Mail::assertNothingQueued();
 });
+
+test('the team page runs the same number of queries however many people are on it', function () {
+    $lead = User::factory()->create();
+    $team = Team::factory()->ledBy($lead)->create();
+    $someoneWithWork = fn (array $name = []) => WorkItem::factory()->count(2)->onPlateOf(User::factory()->inTeam($team)->create($name))->create(['starts_on' => today(), 'due_on' => today()->addWeeks(3)]);
+    collect(range(1, 2))->each(fn () => $someoneWithWork());
+
+    $this->assertQueryCountStaysTheSame(
+        visiting: fn () => $this->actingAs($lead->fresh())->get(route('my-team'))->assertOk(),
+        afterAdding: fn () => collect(range(1, 3))->each(fn () => $someoneWithWork(['surname' => 'McAddedLater'])),
+    )->assertSee('McAddedLater');
+});
