@@ -30,6 +30,10 @@ We **never** use raw SQL or the DB facade in our code.  We **always** use the el
 
 Our applications are important but do not contain a lot of data.  So we do not worry too much about micro-optimizations of database queries.  In 99.9999% of cases doing something like `User::orderBy('surname')->get()` is fine - no need to filter/select on specific columns just to save a millisecond.
 
+Avoiding micro-optimizations is not the same as not caring about query counts.  We try and avoid lazy loading.  If the applications AppServiceProvider doesn't have the `Model::preventLazyLoading(! app()->isProduction());` line in the boot method - suggest it to the user.
+
+Similarly - we have adopted the new `DB::prohibitDestructiveCommands($this->app->isProduction());` to help cut down on the risk of someone running a local dev command in production - again - suggest it to the user if it is not in the AppServiceProvider.
+
 We like early returns and guard clauses.  Avoid nesting if statements or using `else` whereever possible.
 
 When creating a new model - please also use the `-mf` flag to generate a migration and factory at the same time.  It just saves running multiple commands so saves some tokens.  It also makes sure the newly created files are in the format that matches the version of Laravel.
@@ -61,7 +65,7 @@ Also note that we like 'fat models' - helper methods, methods that make the main
 
 We like enums over hardcoded strings for things like statuses, roles, etc.  Use laravel's casts to convert the enum to a value.  Our convention is to use \App\Enums\ .  Where is makes sense - we add helper methods to our enums for `label()` (even if it's just doing a `ucfirst()` call - it makes presentation in templates/mailables more consistent) and also `colour()` so we again - get consistent presentation in templates (we usually follow flux-ui's colour names of 'zinc, red, orange, amber, yellow, lime, green, emerald, teal, cyan, sky, blue, indigo, violet, purple, fuchsia, pink, rose'.
 
-Eloquents `findOrFail` or `firstOrFail` methods are your friend.  We have sentry.io exception reporting.  If the application user is trying to do something weird with a non-existent records - let them see a 404 page and be reported to the developers via sentry.  
+Eloquents `findOrFail` or `firstOrFail` methods are your friend.  We have sentry.io exception reporting.  If the application user is trying to do something weird with a non-existent records - let them see a 404 page and be reported to the developers via sentry.
 
 We also have a convention that our user models have an `is_admin` boolean field and an `is_staff` one.  The `is_staff` field just indicates that a user is a member of staff in the broad sense - not just a member of the IT staff.  Our apps tend to be quite simple in terms of access policies.  Admins can see reports, change pretty much anything.  Then there are regular users who can be staff or students (students are effectively `! is_staff`) who can just do things they have permission to do for the workflow the app is capturing.
 
@@ -71,7 +75,7 @@ Our conventions for livewire components are:
 
 1. Properties and attributes at the top
 1.1. Any properties which are used as filters/search or active-tab parameters in the component should use the `#[Url]` livewire attribute
-1.2. Be careful of the `#[Url]` attributes though.  You should avoid using type hints on the properties being tracked in the URL due to the way livewire works.  They will always come through as strings, so you might need to cast or handle those as appropriate. 
+1.2. Be careful of the `#[Url]` attributes though.  You should avoid using type hints on the properties being tracked in the URL due to the way livewire works.  They will always come through as strings, so you might need to cast or handle those as appropriate.
 2. The mount() method followed by the render() method
 3. Any lifecycle methods (such as updatedFoo()) next
 4. Any custom methods after all that.
@@ -135,9 +139,9 @@ Simplicity and readability of the code.  If you read the code and you can't imag
 
 ### Use of lando
 
-We use lando for local development - but we also have functional local development environments.  You can run laravel/artisan commands directly without using lando.  
+We use lando for local development - but we also have functional local development environments.  You can run laravel/artisan commands directly without using lando.
 
-Do not try and run any commands or tools that interact with the database.  Either lando or artisan or boost.  The user will run migrations for you if you ask.  
+Do not try and run any commands or tools that interact with the database.  Either lando or artisan or boost.  The user will run migrations for you if you ask.
 
 Note: The local test environment uses an in-memory database via the RefreshDatabase trait.  So there is no need to run migrations or seeders in the test environment.
 
