@@ -24,6 +24,10 @@
                 </flux:sidebar.header>
                 <flux:sidebar.nav>
                     <flux:sidebar.item icon="home" href="/" wire:navigate>Home</flux:sidebar.item>
+                    @if (auth()->user()->reports()->isNotEmpty())
+                        <flux:sidebar.item icon="calendar-days" href="{{ route('my-team') }}" wire:navigate>My team</flux:sidebar.item>
+                    @endif
+                    <flux:sidebar.item icon="hand-raised" href="{{ route('looking-for-a-hand') }}" wire:navigate>Looking for a hand</flux:sidebar.item>
                     <flux:sidebar.item icon="plus-circle" href="" wire:navigate>New</flux:sidebar.item>
                     <flux:separator class="my-2" />
                     <flux:sidebar.item badge="3" icon="list-bullet" href="" wire:navigate>List things</flux:sidebar.item>
@@ -31,7 +35,10 @@
                 </flux:sidebar.nav>
                 <flux:sidebar.spacer />
                 <flux:sidebar.nav>
-                    <flux:sidebar.item icon="cog-6-tooth" href="#">Settings</flux:sidebar.item>
+                    @if (auth()->user()->canManagePeople())
+                        <flux:sidebar.item icon="users" href="{{ route('people') }}" wire:navigate>People</flux:sidebar.item>
+                    @endif
+                    <flux:sidebar.item icon="cog-6-tooth" href="{{ route('settings') }}" wire:navigate>Settings</flux:sidebar.item>
                     <flux:sidebar.item icon="information-circle" href="#">Help</flux:sidebar.item>
                 </flux:sidebar.nav>
                 <flux:sidebar.nav>
@@ -47,6 +54,14 @@
         </flux:header>
 
         <flux:main role="main">
+            @impersonating
+                <flux:callout variant="warning" icon="eye" inline class="mb-6" heading="You are seeing this as {{ auth()->user()->full_name }}">
+                    <x-slot name="actions">
+                        <flux:button href="{{ route('impersonate.leave') }}">Stop impersonating</flux:button>
+                    </x-slot>
+                </flux:callout>
+            @endImpersonating
+
             {{ $slot }}
         </flux:main>
 

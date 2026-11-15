@@ -2,12 +2,14 @@
 
 namespace Database\Factories;
 
+use App\Models\Team;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\User>
+ * @extends Factory<User>
  */
 class UserFactory extends Factory
 {
@@ -55,5 +57,15 @@ class UserFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'is_staff' => false,
         ]);
+    }
+
+    public function peopleAdmin(): static
+    {
+        return $this->state(['is_people_admin' => true]);
+    }
+
+    public function inTeam(Team $team): static
+    {
+        return $this->state(['team_id' => $team->id]);
     }
 }

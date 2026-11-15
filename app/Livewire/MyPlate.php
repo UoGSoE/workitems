@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Enums\PlateSection;
 use App\Enums\PlateStatus;
 use App\Enums\WorkItemStatus;
+use App\Enums\WorkItemVisibility;
 use App\Events\WorkItemUpdated;
 use App\Models\User;
 use App\Models\WorkItem;
@@ -28,7 +29,13 @@ class MyPlate extends Component
 
     public $elapsedDays = '';
 
+    public $startsOn = '';
+
     public $dueOn = '';
+
+    public $visibility = '';
+
+    public $blurb = '';
 
     #[Locked]
     public $addingToId = null;
@@ -53,8 +60,14 @@ class MyPlate extends Component
         $workItems = auth()->user()->workItemsWithEveryoneInvolved();
         $takingOffFrom = $workItems->find($this->takingOffFromId);
         $personToTakeOff = $takingOffFrom?->people->find($this->takingOffPersonId);
+        $editing = $workItems->find($this->editingId);
 
         return view('livewire.my-plate', [
+            'editing' => $editing,
+            'canChangeVisibility' => $editing && auth()->user()->can('changeVisibility', $editing),
+            'visibilities' => WorkItemVisibility::cases(),
+            'secret' => WorkItemVisibility::Secret,
+            'lookingForAHand' => WorkItemVisibility::LookingForAHand,
             'takingOffFrom' => $takingOffFrom,
             'personToTakeOff' => $personToTakeOff,
             'whoGetsTold' => $personToTakeOff ? $takingOffFrom->whoHearsAboutTakingOff($personToTakeOff, auth()->user()) : null,
@@ -62,7 +75,7 @@ class MyPlate extends Component
             'picked' => $workItems->find($this->pickedId),
             'sections' => collect(PlateSection::cases()),
             'done' => PlateSection::Done,
-            'history' => $workItems->find($this->editingId)?->history()->with('user')->oldest()->get() ?? collect(),
+            'history' => $editing?->history()->with('user')->oldest()->get() ?? collect(),
             'peopleToAdd' => $workItems->find($this->addingToId)?->peopleWhoCouldBeAdded()->get() ?? collect(),
             'workItemsBySection' => $workItems->groupBy(fn (WorkItem $workItem) => $workItem->section()->value),
         ]);
@@ -73,7 +86,7 @@ class MyPlate extends Component
         $this->validate(['whatsOn' => 'required|string|max:255']);
 
         $workItem = auth()->user()->workItems()->create(
-            ['owner_id' => auth()->id(), 'title' => $this->whatsOn, 'status' => WorkItemStatus::Open],
+            ['owner_id' => auth()->id(), 'title' => $this->whatsOn, 'status' => WorkItemStatus::Open, 'visibility' => auth()->user()->visibilityOfNewWorkItems()],
             ['status' => PlateStatus::InProgress, 'added_by_id' => auth()->id()],
         );
 
@@ -96,7 +109,10 @@ class MyPlate extends Component
         $this->notes = $workItem->notes;
         $this->effortDays = $workItem->effort_days;
         $this->elapsedDays = $workItem->elapsed_days;
+        $this->startsOn = $workItem->starts_on?->toDateString();
         $this->dueOn = $workItem->due_on?->toDateString();
+        $this->visibility = $workItem->visibility->value;
+        $this->blurb = $workItem->blurb ?? '';
 
         Flux::modal('edit-work-item')->show();
     }
@@ -108,21 +124,40 @@ class MyPlate extends Component
             'notes' => 'nullable|string',
             'effortDays' => 'nullable|integer|min:1|max:999',
             'elapsedDays' => 'nullable|integer|min:1|max:999',
-            'dueOn' => 'nullable|date',
+            'startsOn' => 'nullable|date',
+            'dueOn' => ['nullable', 'date', Rule::when(filled($this->startsOn), 'after_or_equal:startsOn')],
+            'visibility' => ['required', Rule::enum(WorkItemVisibility::class)],
+            'blurb' => 'nullable|string|max:2000',
         ]);
 
         $workItem = $this->myWorkItem($this->editingId);
+        $visibility = WorkItemVisibility::from($this->visibility);
+        $visibilityIsChanging = $visibility !== $workItem->visibility;
+
+        if ($visibilityIsChanging) {
+            $this->authorize('changeVisibility', $workItem);
+        }
+
+        if (($this->blurb ?: null) !== $workItem->blurb) {
+            $this->authorize('writeBlurb', $workItem);
+        }
 
         $workItem->update([
             'title' => $this->title,
             'notes' => $this->notes ?: null,
             'effort_days' => $this->effortDays ?: null,
             'elapsed_days' => $this->elapsedDays ?: null,
+            'starts_on' => $this->startsOn ?: null,
             'due_on' => $this->dueOn ?: null,
+            'blurb' => $this->blurb ?: null,
         ]);
 
         if ($workItem->wasChanged()) {
             event(new WorkItemUpdated($workItem, auth()->user(), 'changed the details'));
+        }
+
+        if ($visibilityIsChanging) {
+            $workItem->changeVisibility($visibility, by: auth()->user());
         }
 
         Flux::modal('edit-work-item')->close();
@@ -154,7 +189,7 @@ class MyPlate extends Component
     {
         $workItem = $this->myWorkItem($workItemId);
 
-        abort_unless($workItem->allowsTakingOff($workItem->people()->findOrFail($personId), auth()->user()), 403);
+        $this->authorize('takeOff', [$workItem, $workItem->people()->findOrFail($personId)]);
 
         $this->takingOffFromId = $workItem->id;
         $this->takingOffPersonId = $personId;
@@ -170,7 +205,7 @@ class MyPlate extends Component
         $workItem = $this->myWorkItem($this->takingOffFromId);
         $person = $workItem->people()->findOrFail($this->takingOffPersonId);
 
-        abort_unless($workItem->allowsTakingOff($person, auth()->user()), 403);
+        $this->authorize('takeOff', [$workItem, $person]);
 
         $workItem->takeOff($person, takenOffBy: auth()->user(), message: $this->message ?: null);
 
@@ -181,7 +216,7 @@ class MyPlate extends Component
     {
         $workItem = $this->myWorkItem($workItemId);
 
-        abort_if($workItem->owner->is(auth()->user()), 403);
+        $this->authorize('takeOver', $workItem);
 
         $workItem->takeOver(auth()->user());
     }

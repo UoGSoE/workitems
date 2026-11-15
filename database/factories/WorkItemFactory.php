@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Enums\PlateStatus;
 use App\Enums\WorkItemStatus;
+use App\Enums\WorkItemVisibility;
 use App\Models\User;
 use App\Models\WorkItem;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -24,7 +25,23 @@ class WorkItemFactory extends Factory
             'owner_id' => null,
             'title' => fake()->unique()->sentence(4),
             'status' => WorkItemStatus::Open,
+            'visibility' => WorkItemVisibility::PeopleOnIt,
         ];
+    }
+
+    public function secret(): static
+    {
+        return $this->state(['visibility' => WorkItemVisibility::Secret]);
+    }
+
+    public function visibleToTeam(): static
+    {
+        return $this->state(['visibility' => WorkItemVisibility::Team]);
+    }
+
+    public function lookingForAHand(): static
+    {
+        return $this->state(['visibility' => WorkItemVisibility::LookingForAHand]);
     }
 
     public function parked(): static

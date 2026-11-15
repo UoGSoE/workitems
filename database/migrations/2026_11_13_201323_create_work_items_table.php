@@ -17,8 +17,11 @@ return new class extends Migration
             $table->string('title');
             $table->text('notes')->nullable();
             $table->string('status');
+            $table->string('visibility');
+            $table->text('blurb')->nullable();
             $table->unsignedSmallInteger('effort_days')->nullable();
             $table->unsignedSmallInteger('elapsed_days')->nullable();
+            $table->date('starts_on')->nullable();
             $table->date('due_on')->nullable();
             $table->timestamps();
         });

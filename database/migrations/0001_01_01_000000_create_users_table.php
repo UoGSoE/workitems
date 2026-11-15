@@ -19,6 +19,11 @@ return new class extends Migration
             $table->string('forenames');
             $table->boolean('is_staff')->default(false);
             $table->boolean('is_admin')->default(false);
+            $table->boolean('is_people_admin')->default(false);
+            $table->unsignedBigInteger('team_id')->nullable();
+            $table->string('job_title')->nullable();
+            $table->boolean('shows_work_to_team')->default(false);
+            $table->date('left_on')->nullable();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
             $table->rememberToken();

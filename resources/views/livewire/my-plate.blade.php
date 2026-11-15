@@ -59,12 +59,39 @@
             <flux:textarea wire:model="notes" label="Notes" rows="auto" />
             <flux:input wire:model="effortDays" type="number" min="1" label="Rough effort, in days" />
             <flux:input wire:model="elapsedDays" type="number" min="1" label="Rough elapsed time, in days" description:trailing="A day of work can still take a week to land." />
-            <flux:input wire:model="dueOn" type="date" label="By when" />
+            <flux:date-picker wire:model.live="startsOn" label="Starts around" selectable-header clearable description:trailing="A ballpark is fine. With a by-when date as well, your lead sees it on the team timeline." />
+            <flux:date-picker wire:model="dueOn" wire:key="due-on-after-{{ $startsOn }}" :open-to="$startsOn ?: null" label="By when" selectable-header clearable />
+
+            @if ($canChangeVisibility)
+                <flux:radio.group wire:model.live="visibility" label="Who can see this?">
+                    @foreach ($visibilities as $choice)
+                        <flux:radio wire:key="visibility-{{ $choice->value }}" value="{{ $choice->value }}" label="{{ $choice->label() }}" description="{{ $choice->explanation() }}" />
+                    @endforeach
+                </flux:radio.group>
+
+                @if ($visibility === $secret->value)
+                    <flux:callout variant="danger" icon="lock-closed" heading="Secret cannot be undone" text="Once you save, only the people on this work item, and who they report to, will ever see it. Nobody can open it up again, including you and anyone who takes it over. The only way back is to make a new work item." />
+                @endif
+
+                @if ($visibility === $lookingForAHand->value)
+                    <flux:textarea wire:model="blurb" label="Why might someone want to help?" rows="auto" description:trailing="Optional. Everyone sees it on the looking for a hand page. Markdown works for bold, lists and links." />
+                @endif
+            @elseif ($editing)
+                <div>
+                    <flux:heading level="3">Who can see this?</flux:heading>
+                    <flux:text class="mt-2">{{ $editing->visibility->label() }}</flux:text>
+                    @if ($editing->isSecret())
+                        <flux:text class="mt-1">This work item is secret. Only the people on it, and who they report to, can ever see it.</flux:text>
+                    @else
+                        <flux:text class="mt-1">Only {{ $editing->owner->full_name }} can change this.</flux:text>
+                    @endif
+                </div>
+            @endif
 
             <div class="flex gap-2">
                 <flux:spacer />
                 <flux:button x-on:click="$flux.modal('edit-work-item').close()">Cancel</flux:button>
-                <flux:button type="submit" variant="primary">Save</flux:button>
+                <flux:button type="submit" variant="primary">{{ $canChangeVisibility && $visibility === $secret->value ? 'Save, and keep it secret for good' : 'Save' }}</flux:button>
             </div>
         </form>
 
@@ -162,9 +189,9 @@
 
                     <flux:command.item icon="pencil-square" wire:click="edit({{ $picked->id }})" x-on:click="$flux.modal('palette').close()">Details</flux:command.item>
                     <flux:command.item icon="user-plus" wire:click="choosePersonFor({{ $picked->id }})" x-on:click="$flux.modal('palette').close()">Add someone</flux:command.item>
-                    @if ($picked->owner->isNot(auth()->user()))
+                    @can('takeOver', $picked)
                         <flux:command.item icon="hand-raised" wire:click="takeOver({{ $picked->id }})" x-on:click="$flux.modal('palette').close()">Take this over</flux:command.item>
-                    @endif
+                    @endcan
 
                     @foreach ($picked->peopleWhoCanBeTakenOffBy(auth()->user()) as $person)
                         <flux:command.item wire:key="palette-take-off-{{ $person->id }}" icon="x-mark" wire:click="chooseToTakeOff({{ $picked->id }}, {{ $person->id }})" x-on:click="$flux.modal('palette').close()">Take {{ $person->nameAsSeenBy(auth()->user()) }} off this</flux:command.item>

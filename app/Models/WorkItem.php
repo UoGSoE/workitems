@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\PlateSection;
 use App\Enums\PlateStatus;
 use App\Enums\WorkItemStatus;
+use App\Enums\WorkItemVisibility;
 use App\Events\PersonAddedToWorkItem;
 use App\Events\PersonTakenOffWorkItem;
 use App\Events\WorkItemTakenOver;
@@ -29,8 +30,11 @@ class WorkItem extends Model
         'title',
         'notes',
         'status',
+        'visibility',
+        'blurb',
         'effort_days',
         'elapsed_days',
+        'starts_on',
         'due_on',
     ];
 
@@ -41,6 +45,8 @@ class WorkItem extends Model
     {
         return [
             'status' => WorkItemStatus::class,
+            'visibility' => WorkItemVisibility::class,
+            'starts_on' => 'date',
             'due_on' => 'date',
         ];
     }
@@ -73,6 +79,22 @@ class WorkItem extends Model
     }
 
     /**
+     * The work items the given person is allowed to see. Keep this saying the same as canBeSeenBy().
+     */
+    public function scopeVisibleTo(Builder $query, User $user): void
+    {
+        $query->where(function (Builder $query) use ($user) {
+            $query->whereHas('people', fn (Builder $people) => $people->whereKey($user->id))
+                ->orWhereHas('people', fn (Builder $people) => $people->whereIn('users.team_id', $user->ledTeams()->pluck('id')))
+                ->orWhere('visibility', WorkItemVisibility::LookingForAHand)
+                ->orWhere(function (Builder $query) use ($user) {
+                    $query->where('visibility', WorkItemVisibility::Team)
+                        ->whereIn('owner_id', $user->peopleWhoCountMeInTheirTeam()->modelKeys());
+                });
+        });
+    }
+
+    /**
      * The rough size and by-when date in words, eg "1 day of work, 3 days elapsed, by 18 Dec 2026".
      */
     public function summary(): string
@@ -80,8 +102,21 @@ class WorkItem extends Model
         return collect([
             $this->effort_days ? $this->effort_days.' '.Str::plural('day', $this->effort_days).' of work' : null,
             $this->elapsed_days ? $this->elapsed_days.' '.Str::plural('day', $this->elapsed_days).' elapsed' : null,
+            $this->starts_on ? 'from '.$this->starts_on->format('j M Y') : null,
             $this->due_on ? 'by '.$this->due_on->format('j M Y') : null,
         ])->filter()->join(', ');
+    }
+
+    /**
+     * The owner's pitch for help, turned from markdown into HTML that is safe to show to everyone:
+     * raw HTML is stripped out, links that could run script lose their address, and pictures are
+     * left out so that nobody's browser fetches something from an address the owner chose.
+     */
+    public function blurbAsHtml(): string
+    {
+        $html = Str::markdown($this->blurb ?? '', ['html_input' => 'strip', 'allow_unsafe_links' => false]);
+
+        return strip_tags($html, ['p', 'br', 'strong', 'em', 'a', 'ul', 'ol', 'li', 'code', 'pre', 'blockquote']);
     }
 
     /**
@@ -121,13 +156,51 @@ class WorkItem extends Model
     }
 
     /**
-     * Everyone who is not on this work item yet.
+     * Whether the given person is allowed to see this work item. Keep this saying the same as scopeVisibleTo().
+     */
+    public function canBeSeenBy(User $user): bool
+    {
+        if ($this->people->contains($user)) {
+            return true;
+        }
+
+        if ($this->people->contains(fn (User $person) => $user->isLineManagerOf($person))) {
+            return true;
+        }
+
+        if ($this->visibility === WorkItemVisibility::LookingForAHand) {
+            return true;
+        }
+
+        return $this->visibility === WorkItemVisibility::Team && $this->owner->peopleInMyTeam()->contains($user);
+    }
+
+    public function isOwnedBy(User $user): bool
+    {
+        return $this->owner->is($user);
+    }
+
+    public function isSecret(): bool
+    {
+        return $this->visibility === WorkItemVisibility::Secret;
+    }
+
+    /**
+     * Whether there is a rough start and a by-when date, which is what puts a work item on a team's timeline.
+     */
+    public function hasBallparkDates(): bool
+    {
+        return $this->starts_on !== null && $this->due_on !== null;
+    }
+
+    /**
+     * Everyone still here who is not on this work item yet.
      *
      * @return Builder<User>
      */
     public function peopleWhoCouldBeAdded(): Builder
     {
-        return User::whereNotIn('id', $this->people->modelKeys())->orderBy('surname');
+        return User::current()->whereNotIn('id', $this->people->modelKeys())->orderBy('surname');
     }
 
     /**
@@ -231,6 +304,44 @@ class WorkItem extends Model
 
         event(new WorkItemUpdated($this, $newOwner, 'took it over from '.$previousOwner->full_name));
         event(new WorkItemTakenOver($this, $newOwner, $previousOwner));
+    }
+
+    /**
+     * Hand this work item from its owner to someone else, on the owner's behalf. The
+     * new owner is added if they are not already on it, and the old owner comes off.
+     */
+    public function giveTo(User $newOwner, User $by): void
+    {
+        $previousOwner = $this->owner;
+
+        if (! $this->people->contains($newOwner)) {
+            $this->addPerson($newOwner, addedBy: $by, reason: 'Taking over from '.$previousOwner->full_name);
+        }
+
+        $this->update(['owner_id' => $newOwner->id]);
+        $this->people()->detach($previousOwner);
+
+        event(new WorkItemUpdated($this, $by, 'gave it to '.$newOwner->full_name.' from '.$previousOwner->full_name));
+    }
+
+    /**
+     * Take someone who has left off this work item. Nobody is emailed, because the person who would be told has gone.
+     */
+    public function takeOffSomeoneWhoHasLeft(User $leaver, User $by): void
+    {
+        $this->people()->detach($leaver);
+
+        event(new WorkItemUpdated($this, $by, 'took '.$leaver->full_name.' off it'));
+    }
+
+    /**
+     * Change who can see this work item, and say so in its history.
+     */
+    public function changeVisibility(WorkItemVisibility $visibility, User $by): void
+    {
+        $this->update(['visibility' => $visibility]);
+
+        event(new WorkItemUpdated($this, $by, $visibility->historyLine()));
     }
 
     /**
