@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\WorkItem;
 use Flux\Flux;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
@@ -32,6 +33,8 @@ class MyTeam extends Component
 
     public $draftPersonIds = [];
 
+    public $draftOwnerId = '';
+
     #[Locked]
     public $tryingDraft = false;
 
@@ -45,7 +48,8 @@ class MyTeam extends Component
             'history' => $showing?->history()->with('user')->oldest()->get() ?? collect(),
             'weeks' => self::WEEKS,
             'months' => $this->monthsAcross($thisWeek),
-            'plans' => auth()->user()->reports()->map(fn (User $person) => $this->planFor($person, $thisWeek)),
+            'canDraftFor' => $this->peopleICanDraftFor(),
+            'plans' => $this->peopleToPlanFor()->map(fn (User $person) => $this->planFor($person, $thisWeek)),
         ]);
     }
 
@@ -80,28 +84,103 @@ class MyTeam extends Component
     {
         $this->tryingDraft = false;
 
+        $this->validateDraft();
+
+        $this->tryingDraft = true;
+    }
+
+    /**
+     * Turn the draft into a real work item on the horizon of the chosen people.
+     */
+    public function addDraft(): void
+    {
+        $this->validateDraft();
+
+        if (count($this->draftPersonIds) > 1) {
+            $this->reset('draftOwnerId');
+
+            Flux::modal('draft-owner')->show();
+
+            return;
+        }
+
+        $this->turnDraftIntoWorkOwnedBy($this->draftPersonIds[0]);
+    }
+
+    /**
+     * A draft for several people needs one of them picked as its owner before it becomes real.
+     */
+    public function addDraftWithOwner(): void
+    {
+        $this->validateDraft();
+        $this->validate(['draftOwnerId' => ['required', Rule::in($this->draftPersonIds)]], attributes: ['draftOwnerId' => 'owner']);
+
+        $this->turnDraftIntoWorkOwnedBy($this->draftOwnerId);
+
+        Flux::modal('draft-owner')->close();
+    }
+
+    public function clearDraft(): void
+    {
+        $this->reset('draftTitle', 'draftStartsOn', 'draftDueOn', 'draftPersonIds', 'draftOwnerId', 'tryingDraft');
+    }
+
+    private function validateDraft(): void
+    {
         $this->validate([
             'draftTitle' => 'required|string|max:255',
             'draftStartsOn' => 'required|date',
             'draftDueOn' => 'required|date|after_or_equal:draftStartsOn',
             'draftPersonIds' => 'required|array',
-            'draftPersonIds.*' => Rule::in(auth()->user()->reports()->modelKeys()),
+            'draftPersonIds.*' => Rule::in($this->peopleICanDraftFor()->modelKeys()),
         ]);
-
-        $this->tryingDraft = true;
-    }
-
-    public function clearDraft(): void
-    {
-        $this->reset('draftTitle', 'draftStartsOn', 'draftDueOn', 'draftPersonIds', 'tryingDraft');
     }
 
     /**
-     * The work items that someone who reports to me is on. A lead may see all of these.
+     * A lead can draft work for the people who report to them, and for themselves.
+     *
+     * @return EloquentCollection<int, User>
+     */
+    private function peopleICanDraftFor(): EloquentCollection
+    {
+        return auth()->user()->reports()->prepend(auth()->user());
+    }
+
+    /**
+     * The people whose timelines are shown: my reports, and me while I am trying a draft against myself.
+     *
+     * @return EloquentCollection<int, User>
+     */
+    private function peopleToPlanFor(): EloquentCollection
+    {
+        if ($this->tryingDraft && in_array(auth()->id(), $this->draftPersonIds)) {
+            return $this->peopleICanDraftFor();
+        }
+
+        return auth()->user()->reports();
+    }
+
+    private function turnDraftIntoWorkOwnedBy(int|string $ownerId): void
+    {
+        $people = User::findMany($this->draftPersonIds);
+
+        auth()->user()->setUpWork(
+            ['title' => $this->draftTitle, 'starts_on' => $this->draftStartsOn, 'due_on' => $this->draftDueOn],
+            for: $people,
+            ownedBy: $people->find($ownerId),
+        );
+
+        $this->clearDraft();
+
+        Flux::toast('Added.', variant: 'success');
+    }
+
+    /**
+     * The work items that I am on or that someone who reports to me is on. A lead may see all of these.
      */
     private function workOfMyPeople(): Builder
     {
-        $myPeople = auth()->user()->reports()->modelKeys();
+        $myPeople = $this->peopleICanDraftFor()->modelKeys();
 
         return WorkItem::visibleTo(auth()->user())->whereHas('people', fn (Builder $people) => $people->whereKey($myPeople));
     }
@@ -109,7 +188,7 @@ class MyTeam extends Component
     /**
      * What one person is carrying: the work with ballpark dates as bars for the timeline, and the rest grouped by where it sits.
      *
-     * @return array{person: User, bars: Collection, draft: array|null, otherWork: Collection<string, Collection<int, WorkItem>>}
+     * @return array{person: User, name: string, bars: Collection, draft: array|null, otherWork: Collection<string, Collection<int, WorkItem>>}
      */
     private function planFor(User $person, Carbon $thisWeek): array
     {
@@ -123,6 +202,7 @@ class MyTeam extends Component
 
         return [
             'person' => $person,
+            'name' => ucfirst($person->nameAsSeenBy(auth()->user())),
             'bars' => $openWork->filter->hasBallparkDates()->map(fn (WorkItem $workItem) => [
                 'workItem' => $workItem,
                 'from' => $this->weekOf($workItem->starts_on, $thisWeek),

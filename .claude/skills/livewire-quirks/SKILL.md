@@ -87,6 +87,21 @@ pass through, so `<flux:main role="main">` fixes it. This app's layout has it.
 Checked 2026-11-13 with
 `document.querySelectorAll('[role=main]').length === 1`.
 
+### Focusing a `flux:radio` selects it
+
+Symptom: a `flux:radio.group` with nothing chosen, in a flyout. Tab onto the
+group, or put `autofocus` on the first radio, and the first radio becomes
+checked (`aria-checked="true"`) without a click or a key press on it. Enter
+then submits the form with that choice. A native radio group only takes
+focus; this one also selects.
+
+Seen 2026-11-15 on the "Who owns it?" flyout of the team page, by keyboard in
+headless Chrome. Where "nothing chosen" has to mean something, use a native
+`<flux:select placeholder="...">` instead: it opens focused (`autofocus`
+works on the default variant) with an empty value, and the server's
+`required` rule refuses an empty submit. Not checked: whether a mouse click
+elsewhere in the group has the same effect, or other Flux versions.
+
 ## Command palette (`flux:command`)
 
 The docs show one palette in a bare modal and say nothing about a palette

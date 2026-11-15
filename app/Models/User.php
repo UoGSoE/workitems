@@ -3,8 +3,10 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\PlateStatus;
 use App\Enums\WorkItemStatus;
 use App\Enums\WorkItemVisibility;
+use App\Events\WorkItemUpdated;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -250,6 +252,31 @@ class User extends Authenticatable
     public function unfinishedWorkItems(): Collection
     {
         return $this->workItems()->where('work_items.status', '!=', WorkItemStatus::Done)->with('people', 'owner')->get();
+    }
+
+    /**
+     * Create a work item for other people, as a lead does from a draft. It goes on everyone's
+     * horizon, and everyone apart from the person setting it up is told.
+     *
+     * @param  array{title: string, starts_on: string, due_on: string}  $details
+     * @param  Collection<int, User>  $for
+     */
+    public function setUpWork(array $details, Collection $for, User $ownedBy): WorkItem
+    {
+        $workItem = WorkItem::create([
+            ...$details,
+            'owner_id' => $ownedBy->id,
+            'status' => WorkItemStatus::Open,
+            'visibility' => $ownedBy->visibilityOfNewWorkItems(),
+        ]);
+
+        event(new WorkItemUpdated($workItem, $this, 'created it'));
+
+        $for->each(fn (User $person) => $person->is($this)
+            ? $workItem->people()->attach($this, ['status' => PlateStatus::Upcoming, 'added_by_id' => $this->id])
+            : $workItem->addPerson($person, addedBy: $this, reason: $person->is($ownedBy) ? 'As its owner' : null));
+
+        return $workItem;
     }
 
     /**

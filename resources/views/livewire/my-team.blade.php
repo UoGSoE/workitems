@@ -12,16 +12,18 @@
 
         <flux:checkbox.group wire:model="draftPersonIds" label="Try it against">
             <div class="flex flex-wrap gap-x-6 gap-y-2">
-                @foreach ($plans as $plan)
-                    <flux:checkbox wire:key="draft-person-{{ $plan['person']->id }}" value="{{ $plan['person']->id }}" label="{{ $plan['person']->full_name }}" />
+                @foreach ($canDraftFor as $person)
+                    <flux:checkbox wire:key="draft-person-{{ $person->id }}" value="{{ $person->id }}" label="{{ ucfirst($person->nameAsSeenBy(auth()->user())) }}" />
                 @endforeach
             </div>
         </flux:checkbox.group>
 
         <div class="flex gap-2">
-            <flux:button type="submit" variant="primary">Try it</flux:button>
+            <flux:button type="submit" :variant="$tryingDraft ? null : 'primary'">Try it</flux:button>
             @if ($tryingDraft)
                 <flux:button wire:click="clearDraft">Clear</flux:button>
+                <flux:spacer />
+                <flux:button wire:click="addDraft" variant="primary">Add it for real</flux:button>
             @endif
         </div>
     </form>
@@ -31,10 +33,10 @@
     @foreach ($plans as $plan)
         <section wire:key="person-{{ $plan['person']->id }}" class="mt-8 first-of-type:mt-0">
             <div class="flex items-center gap-4">
-                <flux:heading size="lg" level="2">{{ $plan['person']->full_name }}</flux:heading>
+                <flux:heading size="lg" level="2">{{ $plan['name'] }}</flux:heading>
                 @if ($plan['otherWork']->isNotEmpty())
                     <flux:modal.trigger :name="'other-work-'.$plan['person']->id">
-                        <flux:badge as="button" size="sm" aria-label="{{ $plan['otherWork']->sum->count() }} other {{ Str::plural('thing', $plan['otherWork']->sum->count()) }} for {{ $plan['person']->full_name }}">+ {{ $plan['otherWork']->sum->count() }}</flux:badge>
+                        <flux:badge as="button" size="sm" aria-label="{{ $plan['otherWork']->sum->count() }} other {{ Str::plural('thing', $plan['otherWork']->sum->count()) }} for {{ $plan['name'] }}">+ {{ $plan['otherWork']->sum->count() }}</flux:badge>
                     </flux:modal.trigger>
                 @endif
             </div>
@@ -48,23 +50,30 @@
                     @endforeach
 
                     @if ($plan['draft'])
-                        <div
-                            class="truncate rounded border-2 border-dashed border-zinc-800 px-2 py-1 text-sm font-medium text-zinc-900 dark:border-white dark:text-white"
-                            aria-label="Draft for {{ $plan['person']->full_name }}: {{ $draftTitle }}, {{ $plan['draft']['startsOn']->format('j M Y') }} to {{ $plan['draft']['dueOn']->format('j M Y') }}"
+                        <flux:tooltip
+                            :content="'Draft: '.$draftTitle.', '.$plan['draft']['startsOn']->format('j M').' to '.$plan['draft']['dueOn']->format('j M Y')"
                             style="grid-column: {{ $plan['draft']['from'] }} / {{ $plan['draft']['to'] }}"
-                        >Draft: {{ $draftTitle }}</div>
+                        >
+                            <div
+                                class="truncate rounded border-2 border-dashed border-zinc-800 px-2 py-1 text-sm font-medium text-zinc-900 dark:border-white dark:text-white"
+                                aria-label="Draft for {{ $plan['person']->nameAsSeenBy(auth()->user()) }}: {{ $draftTitle }}, {{ $plan['draft']['startsOn']->format('j M Y') }} to {{ $plan['draft']['dueOn']->format('j M Y') }}"
+                            >Draft: {{ $draftTitle }}</div>
+                        </flux:tooltip>
                     @endif
 
                     @forelse ($plan['bars'] as $bar)
-                        <button
-                            type="button"
-                            wire:click="show({{ $bar['workItem']->id }})"
+                        <flux:tooltip
                             wire:key="bar-{{ $plan['person']->id }}-{{ $bar['workItem']->id }}"
-                            class="cursor-pointer truncate rounded bg-zinc-200 px-2 py-1 text-left text-sm text-zinc-900 dark:bg-zinc-600 dark:text-white"
-                            aria-label="{{ $bar['workItem']->title }}, {{ $bar['where'] }}, {{ $bar['workItem']->starts_on->format('j M Y') }} to {{ $bar['workItem']->due_on->format('j M Y') }}"
-                            title="{{ $bar['workItem']->title }}: {{ $bar['workItem']->starts_on->format('j M') }} to {{ $bar['workItem']->due_on->format('j M Y') }}, {{ $bar['where'] }}"
+                            :content="$bar['workItem']->title.', '.$bar['workItem']->starts_on->format('j M').' to '.$bar['workItem']->due_on->format('j M Y')"
                             style="grid-column: {{ $bar['from'] }} / {{ $bar['to'] }}"
-                        >{{ $bar['workItem']->title }}</button>
+                        >
+                            <button
+                                type="button"
+                                wire:click="show({{ $bar['workItem']->id }})"
+                                class="block w-full cursor-pointer truncate rounded bg-zinc-200 px-2 py-1 text-left text-sm text-zinc-900 dark:bg-zinc-600 dark:text-white"
+                                aria-label="{{ $bar['workItem']->title }}, {{ $bar['where'] }}, {{ $bar['workItem']->starts_on->format('j M Y') }} to {{ $bar['workItem']->due_on->format('j M Y') }}"
+                            >{{ $bar['workItem']->title }}</button>
+                        </flux:tooltip>
                     @empty
                         <div style="grid-column: 1 / -1"><flux:text class="py-1">Nothing with dates yet.</flux:text></div>
                     @endforelse
@@ -84,7 +93,7 @@
             @if ($plan['otherWork']->isNotEmpty())
                 <flux:modal :name="'other-work-'.$plan['person']->id" variant="flyout">
                     <div class="space-y-6">
-                        <flux:heading size="lg" level="2">Other work: {{ $plan['person']->full_name }}</flux:heading>
+                        <flux:heading size="lg" level="2">Other work: {{ $plan['name'] }}</flux:heading>
 
                         @foreach ($plan['otherWork'] as $where => $workItems)
                             <div wire:key="other-work-{{ $plan['person']->id }}-{{ $loop->index }}">
@@ -106,6 +115,25 @@
             @endif
         </section>
     @endforeach
+
+    <flux:modal name="draft-owner" variant="flyout">
+        @if ($tryingDraft)
+            <form wire:submit="addDraftWithOwner" class="space-y-6">
+                <flux:heading size="lg" level="2">Who owns it?</flux:heading>
+
+                <flux:select wire:model="draftOwnerId" label="{{ $draftTitle }}" placeholder="Choose who owns it" autofocus>
+                    @foreach ($plans->filter(fn ($plan) => in_array($plan['person']->id, $draftPersonIds)) as $plan)
+                        <flux:select.option wire:key="draft-owner-{{ $plan['person']->id }}" value="{{ $plan['person']->id }}">{{ $plan['name'] }}</flux:select.option>
+                    @endforeach
+                </flux:select>
+
+                <div class="flex">
+                    <flux:spacer />
+                    <flux:button type="submit" variant="primary">Add it for real</flux:button>
+                </div>
+            </form>
+        @endif
+    </flux:modal>
 
     <flux:modal name="work-item" variant="flyout">
         @if ($showing)
