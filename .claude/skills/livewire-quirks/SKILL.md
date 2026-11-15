@@ -223,10 +223,11 @@ a person stays escaped; markdown syntax does not. Checked 2026-11-14 by
 rendering a mailable.
 
 Fix: put anything a person typed inside an HTML paragraph, which markdown
-leaves alone, and keep blank lines out of it:
+leaves alone, and keep blank lines out of it. A blank line inside the typed
+text also ends the paragraph, so `squish()` single-line values such as a title:
 
 ```blade
-<p>{{ $who->full_name }} {{ $whatHappened }} <a href="{{ route('home') }}">{{ $workItem->title }}</a>.</p>
+<p>{{ $who->full_name }} {{ $whatHappened }} <a href="{{ route('home') }}">{{ str($workItem->title)->squish() }}</a>.</p>
 
 @if ($theirMessage)
 <p>Message: {!! nl2br(e($theirMessage)) !!}</p>

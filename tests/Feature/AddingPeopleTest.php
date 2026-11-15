@@ -57,3 +57,10 @@ test('the added email leaves out the reason line when none was given, and shows 
         ->assertSeeInHtml('Why you: See [this page](https://example.test/x)')
         ->assertDontSeeInHtml('href="https://example.test/x"', escape: false);
 });
+
+test('the added email shows the reason on one line however it was typed', function () {
+    $workItem = WorkItem::factory()->make();
+
+    (new AddedToWorkItemMail($workItem, User::factory()->make(), "You know\n\nthe   old one"))
+        ->assertSeeInHtml('Why you: You know the old one');
+});

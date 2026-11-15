@@ -1,7 +1,9 @@
 <?php
 
 use App\Livewire\MyPlate;
+use App\Mail\AddedToWorkItemMail;
 use App\Mail\TakenOffWorkItemMail;
+use App\Mail\TakenOverWorkItemMail;
 use App\Models\User;
 use App\Models\WorkItem;
 use Illuminate\Support\Facades\Mail;
@@ -161,4 +163,13 @@ test('the email shows the title and message as typed and does not turn them into
         ->assertSeeInHtml('Second paragraph with **stars**')
         ->assertDontSeeInHtml('href="https://example.test/x"', escape: false)
         ->assertDontSeeInHtml('<img', escape: false);
+});
+
+test('the emails show a title on one line however it was typed', function () {
+    $workItem = WorkItem::factory()->make(['title' => "Replace the\n\nstorage   array"]);
+    $someone = User::factory()->make();
+
+    (new AddedToWorkItemMail($workItem, $someone))->assertSeeInHtml('Replace the storage array');
+    (new TakenOffWorkItemMail($workItem, $someone, 'took you off'))->assertSeeInHtml('Replace the storage array');
+    (new TakenOverWorkItemMail($workItem, $someone))->assertSeeInHtml('Replace the storage array');
 });
