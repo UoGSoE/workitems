@@ -34,9 +34,9 @@
         <section wire:key="person-{{ $plan['person']->id }}" class="mt-8 first-of-type:mt-0">
             <div class="flex items-center gap-4">
                 <flux:heading size="lg" level="2">{{ $plan['name'] }}</flux:heading>
-                @if ($plan['otherWork']->isNotEmpty())
-                    <flux:modal.trigger :name="'other-work-'.$plan['person']->id">
-                        <flux:badge as="button" size="sm" aria-label="{{ $plan['otherWork']->sum->count() }} other {{ Str::plural('thing', $plan['otherWork']->sum->count()) }} for {{ $plan['name'] }}">+ {{ $plan['otherWork']->sum->count() }}</flux:badge>
+                @if ($plan['openWorkCount'])
+                    <flux:modal.trigger :name="'work-of-'.$plan['person']->id">
+                        <flux:badge as="button" size="sm" aria-label="{{ $plan['openWorkCount'] }} open work {{ Str::plural('item', $plan['openWorkCount']) }} for {{ $plan['name'] }}">{{ $plan['openWorkCount'] }}</flux:badge>
                     </flux:modal.trigger>
                 @endif
             </div>
@@ -69,7 +69,7 @@
                         >
                             <button
                                 type="button"
-                                wire:click="show({{ $bar['workItem']->id }})"
+                                wire:click="show({{ $bar['workItem']->id }}, {{ $plan['person']->id }})"
                                 class="block w-full cursor-pointer truncate rounded bg-zinc-200 px-2 py-1 text-left text-sm text-zinc-900 dark:bg-zinc-600 dark:text-white"
                                 aria-label="{{ $bar['workItem']->title }}, {{ $bar['where'] }}, {{ $bar['workItem']->starts_on->format('j M Y') }} to {{ $bar['workItem']->due_on->format('j M Y') }}"
                             >{{ $bar['workItem']->title }}</button>
@@ -90,18 +90,21 @@
                 </flux:text>
             @endif
 
-            @if ($plan['otherWork']->isNotEmpty())
-                <flux:modal :name="'other-work-'.$plan['person']->id" variant="flyout">
+            @if ($plan['openWorkCount'])
+                <flux:modal :name="'work-of-'.$plan['person']->id" variant="flyout">
                     <div class="space-y-6">
-                        <flux:heading size="lg" level="2">Other work: {{ $plan['name'] }}</flux:heading>
+                        <flux:heading size="lg" level="2">{{ $plan['name'] }}</flux:heading>
 
-                        @foreach ($plan['otherWork'] as $where => $workItems)
-                            <div wire:key="other-work-{{ $plan['person']->id }}-{{ $loop->index }}">
+                        @foreach ($plan['openWork'] as $where => $workItems)
+                            <div wire:key="work-of-{{ $plan['person']->id }}-{{ $loop->index }}">
                                 <flux:heading level="3">{{ $where }}</flux:heading>
                                 <ul class="mt-2 space-y-1">
                                     @foreach ($workItems as $workItem)
-                                        <li wire:key="other-work-{{ $plan['person']->id }}-{{ $workItem->id }}">
-                                            <flux:button variant="subtle" size="sm" inset="left" wire:click="show({{ $workItem->id }})">{{ $workItem->title }}</flux:button>
+                                        <li wire:key="work-of-{{ $plan['person']->id }}-{{ $workItem->id }}">
+                                            <flux:button variant="subtle" size="sm" inset="left" wire:click="show({{ $workItem->id }}, {{ $plan['person']->id }})">{{ $workItem->title }}</flux:button>
+                                            @if ($workItem->isSecret())
+                                                <flux:badge size="sm" icon="lock-closed">Secret</flux:badge>
+                                            @endif
                                             @if ($workItem->summary())
                                                 <flux:text>{{ $workItem->summary() }}</flux:text>
                                             @endif
@@ -110,6 +113,20 @@
                                 </ul>
                             </div>
                         @endforeach
+
+                        @if ($plan['canMoveAllTo']->isNotEmpty())
+                            <flux:separator />
+
+                            <form wire:submit="askToMoveAll({{ $plan['person']->id }})" class="space-y-6">
+                                <flux:select wire:model="moveAllTo.{{ $plan['person']->id }}" label="Move it all from {{ $plan['name'] }} to" placeholder="Choose someone">
+                                    @foreach ($plan['canMoveAllTo'] as $person)
+                                        <flux:select.option wire:key="move-all-{{ $plan['person']->id }}-to-{{ $person->id }}" value="{{ $person->id }}">{{ ucfirst($person->nameAsSeenBy(auth()->user())) }}</flux:select.option>
+                                    @endforeach
+                                </flux:select>
+
+                                <flux:button type="submit">Move it all</flux:button>
+                            </form>
+                        @endif
                     </div>
                 </flux:modal>
             @endif
@@ -132,6 +149,29 @@
                     <flux:button type="submit" variant="primary">Add it for real</flux:button>
                 </div>
             </form>
+        @endif
+    </flux:modal>
+
+    <flux:modal name="confirm-move-all" class="md:w-96">
+        @if ($movingAllFrom)
+            <div class="space-y-6">
+                <div>
+                    <flux:heading size="lg" level="2">Move all {{ $movingAllFrom['openWorkCount'] }} work {{ Str::plural('item', $movingAllFrom['openWorkCount']) }}?</flux:heading>
+                    <flux:text class="mt-2">From {{ $movingAllFrom['name'] }} to {{ ucfirst($movingAllTo->nameAsSeenBy(auth()->user())) }}. This cannot be undone in one go.</flux:text>
+                </div>
+
+                @if ($secretWarning)
+                    <flux:callout variant="warning" icon="lock-closed" :text="$secretWarning" />
+                @endif
+
+                <div class="flex gap-2">
+                    <flux:spacer />
+                    <flux:modal.close>
+                        <flux:button autofocus>Cancel</flux:button>
+                    </flux:modal.close>
+                    <flux:button wire:click="moveAll" variant="primary">Move it all</flux:button>
+                </div>
+            </div>
         @endif
     </flux:modal>
 
@@ -171,7 +211,26 @@
                     </div>
                 @endif
 
-                <div class="flex">
+                @if ($canMoveTo->isNotEmpty())
+                    <flux:separator />
+
+                    @if ($showing->isSecret())
+                        <flux:callout variant="warning" icon="lock-closed" text="This work item is secret. Whoever you move it to will be able to see it." />
+                    @endif
+
+                    <form wire:submit="move" id="move-work-item">
+                        <flux:select wire:model="moveToId" label="Move it from {{ $showingFor->full_name }} to" placeholder="Choose someone">
+                            @foreach ($canMoveTo as $person)
+                                <flux:select.option wire:key="move-to-{{ $person->id }}" value="{{ $person->id }}">{{ ucfirst($person->nameAsSeenBy(auth()->user())) }}</flux:select.option>
+                            @endforeach
+                        </flux:select>
+                    </form>
+                @endif
+
+                <div class="flex gap-2">
+                    @if ($canMoveTo->isNotEmpty())
+                        <flux:button type="submit" form="move-work-item">Move it</flux:button>
+                    @endif
                     <flux:spacer />
                     <flux:button x-on:click="$flux.modal('work-item').close()" autofocus>Close</flux:button>
                 </div>

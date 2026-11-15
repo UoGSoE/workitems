@@ -212,18 +212,28 @@ class WorkItem extends Model
     }
 
     /**
-     * Put this work item on someone's horizon and tell them. They pull it onto their own plate when they start on it.
+     * Put this work item on someone's horizon and tell them. They pull it onto their own plate when
+     * they start on it. Someone who puts it on their own horizon needs no telling.
      */
     public function addPerson(User $person, User $addedBy, ?string $reason = null): void
+    {
+        $this->putOnHorizonOf($person, $addedBy, $reason);
+
+        if ($person->is($addedBy)) {
+            return;
+        }
+
+        event(new WorkItemUpdated($this, $addedBy, 'added '.$person->full_name));
+        event(new PersonAddedToWorkItem($this, $person, $addedBy, $reason));
+    }
+
+    private function putOnHorizonOf(User $person, User $addedBy, ?string $reason): void
     {
         $this->people()->attach($person, [
             'status' => PlateStatus::Upcoming,
             'added_by_id' => $addedBy->id,
             'reason' => $reason,
         ]);
-
-        event(new WorkItemUpdated($this, $addedBy, 'added '.$person->full_name));
-        event(new PersonAddedToWorkItem($this, $person, $addedBy, $reason));
     }
 
     /**
@@ -309,19 +319,68 @@ class WorkItem extends Model
     /**
      * Hand this work item from its owner to someone else, on the owner's behalf. The
      * new owner is added if they are not already on it, and the old owner comes off.
+     * Nobody is emailed here: whoever hands over several at once sends one email for the lot.
      */
     public function giveTo(User $newOwner, User $by): void
     {
         $previousOwner = $this->owner;
 
         if (! $this->people->contains($newOwner)) {
-            $this->addPerson($newOwner, addedBy: $by, reason: 'Taking over from '.$previousOwner->full_name);
+            $this->putOnHorizonOf($newOwner, addedBy: $by, reason: 'Taking over from '.$previousOwner->full_name);
+
+            event(new WorkItemUpdated($this, $by, 'added '.$newOwner->full_name));
         }
 
         $this->update(['owner_id' => $newOwner->id]);
         $this->people()->detach($previousOwner);
 
         event(new WorkItemUpdated($this, $by, 'gave it to '.$newOwner->full_name.' from '.$previousOwner->full_name));
+    }
+
+    /**
+     * Give one person's place on this work item to someone else, on their lead's say-so. If they
+     * owned it, the new person owns it now. The person who came off is told, and so is the owner
+     * when the swap was not their own doing.
+     */
+    public function movePlace(User $from, User $to, User $by): void
+    {
+        $owner = $this->owner;
+        $newToIt = ! $this->people->contains($to);
+
+        $this->movePlaceWithoutTellingAnyone($from, $to, $by);
+
+        if ($newToIt && $to->isNot($by)) {
+            event(new PersonAddedToWorkItem($this, $to, $by, 'Taking over from '.$from->full_name));
+        }
+
+        event(new PersonTakenOffWorkItem($this, $by, $from, whatHappened: 'gave your place to '.$to->full_name.' on'));
+
+        if ($owner->is($from) || $owner->is($by)) {
+            return;
+        }
+
+        $whatTheOwnerReads = $owner->is($to) ? 'took '.$from->full_name.' off' : 'swapped '.$from->full_name.' for '.$to->full_name.' on';
+
+        event(new PersonTakenOffWorkItem($this, $by, $owner, whatHappened: $whatTheOwnerReads));
+    }
+
+    /**
+     * The move itself and its line of history, with no emails. For when several
+     * work items move at once and one email covers them all.
+     */
+    public function movePlaceWithoutTellingAnyone(User $from, User $to, User $by): void
+    {
+        if (! $this->people->contains($to)) {
+            $this->putOnHorizonOf($to, addedBy: $by, reason: 'Taking over from '.$from->full_name);
+        }
+
+        if ($this->isOwnedBy($from)) {
+            $this->update(['owner_id' => $to->id]);
+        }
+
+        $this->people()->detach($from);
+
+        event(new WorkItemUpdated($this, $by, 'moved it from '.$from->full_name.' to '.$to->full_name));
     }
 
     /**

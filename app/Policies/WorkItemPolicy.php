@@ -34,6 +34,14 @@ class WorkItemPolicy
     }
 
     /**
+     * A lead can give the place of someone who reports to them to somebody else.
+     */
+    public function movePlace(User $user, WorkItem $workItem, User $person): bool
+    {
+        return $user->isLineManagerOf($person) && $workItem->people->contains($person);
+    }
+
+    /**
      * Anyone on a work item can take it over, apart from the person who already owns it.
      */
     public function takeOver(User $user, WorkItem $workItem): bool

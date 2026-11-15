@@ -3,9 +3,9 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
-use App\Enums\PlateStatus;
 use App\Enums\WorkItemStatus;
 use App\Enums\WorkItemVisibility;
+use App\Events\WorkItemsMoved;
 use App\Events\WorkItemUpdated;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -174,12 +174,49 @@ class User extends Authenticatable
 
     /**
      * Give every work item this person owns, apart from the finished ones, to someone else.
+     * They get one email listing what is new to them, not one email for each.
      */
     public function handWorkTo(User $newPerson, User $by): void
     {
-        $this->unfinishedWorkItems()
-            ->filter(fn (WorkItem $workItem) => $workItem->isOwnedBy($this))
-            ->each(fn (WorkItem $workItem) => $workItem->giveTo($newPerson, by: $by));
+        $owned = $this->unfinishedWorkItems()->filter(fn (WorkItem $workItem) => $workItem->isOwnedBy($this));
+        $newToThem = $owned->reject(fn (WorkItem $workItem) => $workItem->people->contains($newPerson))->values();
+
+        $owned->each(fn (WorkItem $workItem) => $workItem->giveTo($newPerson, by: $by));
+
+        if ($newToThem->isEmpty() || $newPerson->is($by)) {
+            return;
+        }
+
+        event(new WorkItemsMoved($by, tell: $newPerson, whatHappened: 'gave you work that '.$this->full_name.' owned', workItems: $newToThem));
+    }
+
+    /**
+     * Give this person's place on every open work item to someone else, as their lead does
+     * when the whole load moves. Parked and finished work stays where it is. Everyone involved
+     * gets one email listing the work, not one email for each.
+     */
+    public function moveOpenWorkTo(User $newPerson, User $by): void
+    {
+        $workItems = $this->workItems()->where('work_items.status', WorkItemStatus::Open)->with('people', 'owner')->get();
+
+        if ($workItems->isEmpty()) {
+            return;
+        }
+
+        $ownersToTell = $workItems->pluck('owner')->unique('id')->reject(fn (User $owner) => $owner->is($this) || $owner->is($newPerson) || $owner->is($by));
+        $ownedBy = fn (User $owner) => $workItems->where('owner_id', $owner->id)->values();
+
+        $workItems->each(fn (WorkItem $workItem) => $workItem->movePlaceWithoutTellingAnyone($this, $newPerson, by: $by));
+
+        event(new WorkItemsMoved($by, tell: $this, whatHappened: 'moved all of your open work to '.$newPerson->full_name, workItems: $workItems));
+
+        $ownersToTell->each(fn (User $owner) => event(new WorkItemsMoved($by, tell: $owner, whatHappened: 'swapped '.$this->full_name.' for '.$newPerson->full_name.' on work you own', workItems: $ownedBy($owner))));
+
+        if ($newPerson->is($by)) {
+            return;
+        }
+
+        event(new WorkItemsMoved($by, tell: $newPerson, whatHappened: 'moved everything '.$this->full_name.' was working on to you', workItems: $workItems));
     }
 
     /**
@@ -272,9 +309,7 @@ class User extends Authenticatable
 
         event(new WorkItemUpdated($workItem, $this, 'created it'));
 
-        $for->each(fn (User $person) => $person->is($this)
-            ? $workItem->people()->attach($this, ['status' => PlateStatus::Upcoming, 'added_by_id' => $this->id])
-            : $workItem->addPerson($person, addedBy: $this, reason: $person->is($ownedBy) ? 'As its owner' : null));
+        $for->each(fn (User $person) => $workItem->addPerson($person, addedBy: $this, reason: $person->is($ownedBy) ? 'As its owner' : null));
 
         return $workItem;
     }

@@ -3,7 +3,7 @@
 use App\Enums\PlateStatus;
 use App\Livewire\MyPlate;
 use App\Livewire\People;
-use App\Mail\AddedToWorkItemMail;
+use App\Mail\WorkItemsMovedMail;
 use App\Models\Team;
 use App\Models\User;
 use App\Models\WorkItem;
@@ -15,18 +15,21 @@ test('when someone goes, a work item they owned passes to the chosen person and 
     $admin = User::factory()->admin()->create();
     $leaver = User::factory()->create(['forenames' => 'Jenny', 'surname' => 'McLeaver']);
     $takesOver = User::factory()->create(['forenames' => 'Jenny', 'surname' => 'McUser']);
-    $workItem = WorkItem::factory()->onPlateOf($leaver)->create();
+    $workItem = WorkItem::factory()->onPlateOf($leaver)->create(['title' => 'Replace the storage array']);
+    $anotherTheyOwned = WorkItem::factory()->onPlateOf($leaver)->create(['title' => 'Update the samba servers']);
 
     $leaver->markAsGone(by: $admin, giveWorkTo: $takesOver);
 
     $workItem->refresh();
     expect($workItem->owner->is($takesOver))->toBeTrue()
+        ->and($anotherTheyOwned->fresh()->owner->is($takesOver))->toBeTrue()
         ->and($workItem->people->modelKeys())->toBe([$takesOver->id])
         ->and($workItem->people->first()->pivot->status)->toBe(PlateStatus::Upcoming)
         ->and($workItem->history()->orderBy('id')->pluck('description')->all())->toBe(['added Jenny McUser', 'gave it to Jenny McUser from Jenny McLeaver'])
         ->and($workItem->history->every(fn ($line) => $line->user->is($admin)))->toBeTrue();
     Mail::assertQueuedCount(1);
-    Mail::assertQueued(AddedToWorkItemMail::class, fn (AddedToWorkItemMail $mail) => $mail->hasTo($takesOver->email));
+    Mail::assertQueued(WorkItemsMovedMail::class, fn (WorkItemsMovedMail $mail) => $mail->hasTo($takesOver->email)
+        && str($mail->render())->containsAll([$admin->full_name.' gave you work that Jenny McLeaver owned', 'Replace the storage array', 'Update the samba servers']));
 });
 
 test('when someone goes, they come off work they did not own, and finished work and other people\'s work are left alone', function () {

@@ -102,6 +102,20 @@ works on the default variant) with an empty value, and the server's
 `required` rule refuses an empty submit. Not checked: whether a mouse click
 elsewhere in the group has the same effect, or other Flux versions.
 
+### A select bound to an unset array key shows its first name as if chosen
+
+Symptom: `<flux:select wire:model="moveAllTo.{{ $id }}" placeholder="Choose someone">`
+with `public $moveAllTo = [];`. The browser shows the first real option
+("Me"), not the placeholder, while the server still holds nothing. Submitting
+gives a `required` error for a field that looks filled in. With the property
+set to `''` for that key the placeholder shows.
+
+Seen 2026-11-15 in the team page's "Move it all" drawer, in headless Chrome.
+Fix: fill every key with `''` in `mount()` and again after the action
+(`MyTeam::nobodyIsChosenToMoveEverythingTo()`). In a test, `assertSet(...,
+'')` passes on an unset key because it compares loosely; use
+`assertSetStrict`.
+
 ## Command palette (`flux:command`)
 
 The docs show one palette in a bare modal and say nothing about a palette

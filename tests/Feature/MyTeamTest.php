@@ -48,7 +48,8 @@ test('work with a rough start and a by-when date is drawn on the timeline, and t
         ->assertSeeInOrder(['grid-column: 1 / 3', 'Already under way, on their plate, 1 Oct 2026 to 27 Nov 2026'], escape: false)
         ->assertSeeInOrder(['grid-column: 3 / 6', 'Replace the storage array, on their plate, 30 Nov 2026 to 18 Dec 2026'], escape: false)
         ->assertSeeInOrder(['grid-column: 9 / 16', 'Move the apps into containers, on their horizon, 11 Jan 2027 to 26 Feb 2027'], escape: false)
-        ->assertSeeInOrder(['3 other things', '+ 3', 'On their plate', 'Update the samba servers', 'Renew the wildcard certificate', 'On their horizon', 'Tidy up the old wiki pages'])
+        ->assertSeeInOrder(['6 open work items for', 'On their plate', 'Update the samba servers', 'Renew the wildcard certificate', 'Already under way', 'Replace the storage array', 'On their horizon', 'Tidy up the old wiki pages', 'Move the apps into containers'])
+        ->assertDontSee('other thing')
         ->assertDontSee('Without both dates')
         ->assertDontSee('Rotate the signing keys')
         ->assertDontSee('Order the replacement disks');
@@ -112,11 +113,11 @@ test('a lead can read the notes and history of work their people are on, and of 
     Livewire::actingAs($lead)
         ->test(MyTeam::class)
         ->assertDontSee('A day of work, then two days of syncing.')
-        ->call('show', $theirs->id)
+        ->call('show', $theirs->id, $developer->id)
         ->assertDispatched('modal-show', name: 'work-item')
         ->assertSee('A day of work, then two days of syncing.')
         ->assertSee('Olivia McUser created it')
-        ->call('show', $notTheirs->id)
+        ->call('show', $notTheirs->id, $developer->id)
         ->assertNotFound();
 
     Livewire::actingAs($developer)->test(MyTeam::class)->assertForbidden();
@@ -250,7 +251,7 @@ test('a lead can try a draft against themselves, which shows their own timeline 
         ->call('addDraft')
         ->assertHasNoErrors()
         ->assertDontSee('Budget and staffing plan')
-        ->call('show', $mine->id)
+        ->call('show', $mine->id, $lead->id)
         ->assertDispatched('modal-show', name: 'work-item');
 
     $workItem = WorkItem::whereKeyNot($mine->id)->sole();

@@ -25,6 +25,16 @@ class MyTeam extends Component
     #[Locked]
     public $showingId = null;
 
+    #[Locked]
+    public $showingForId = null;
+
+    public $moveToId = '';
+
+    public $moveAllTo = [];
+
+    #[Locked]
+    public $movingAllFromId = null;
+
     public $draftTitle = '';
 
     public $draftStartsOn = '';
@@ -38,18 +48,34 @@ class MyTeam extends Component
     #[Locked]
     public $tryingDraft = false;
 
+    public function mount(): void
+    {
+        $this->nobodyIsChosenToMoveEverythingTo();
+    }
+
     public function render()
     {
         $thisWeek = today()->startOfWeek();
         $showing = $this->showingId ? $this->workOfMyPeople()->with('people', 'owner')->find($this->showingId) : null;
+        $showingFor = $showing?->people->find($this->showingForId);
+
+        $plans = $this->peopleToPlanFor()->map(fn (User $person) => $this->planFor($person, $thisWeek));
+
+        $movingAllFrom = $plans->first(fn (array $plan) => $plan['person']->id === $this->movingAllFromId);
+        $movingAllTo = $movingAllFrom ? $this->peopleICanDraftFor()->find($this->moveAllTo[$this->movingAllFromId]) : null;
 
         return view('livewire.my-team', [
+            'movingAllFrom' => $movingAllFrom,
+            'movingAllTo' => $movingAllTo,
+            'secretWarning' => $movingAllFrom ? $this->warningAboutSecretWork($movingAllFrom['secretCount'], $movingAllTo) : null,
             'showing' => $showing,
+            'showingFor' => $showingFor,
+            'canMoveTo' => $showingFor && auth()->user()->can('movePlace', [$showing, $showingFor]) ? $this->peopleICanDraftFor()->except($showingFor->id) : collect(),
             'history' => $showing?->history()->with('user')->oldest()->get() ?? collect(),
             'weeks' => self::WEEKS,
             'months' => $this->monthsAcross($thisWeek),
             'canDraftFor' => $this->peopleICanDraftFor(),
-            'plans' => $this->peopleToPlanFor()->map(fn (User $person) => $this->planFor($person, $thisWeek)),
+            'plans' => $plans,
         ]);
     }
 
@@ -70,11 +96,69 @@ class MyTeam extends Component
         $this->draftDueOn = Carbon::parse($startsOn)->addDay()->toDateString();
     }
 
-    public function show(int $workItemId): void
+    /**
+     * Show a work item as it sits with one of my people, which is whose place can then be moved.
+     */
+    public function show(int $workItemId, int $personId): void
     {
-        $this->showingId = $this->workOfMyPeople()->findOrFail($workItemId)->id;
+        $workItem = $this->workOfMyPeople()->findOrFail($workItemId);
+
+        $this->showingId = $workItem->id;
+        $this->showingForId = $workItem->people()->whereKey($this->peopleICanDraftFor()->modelKeys())->findOrFail($personId)->id;
+        $this->reset('moveToId');
 
         Flux::modal('work-item')->show();
+    }
+
+    /**
+     * Give the place of the person the work item is being shown for to someone else.
+     */
+    public function move(): void
+    {
+        $workItem = $this->workOfMyPeople()->with('people', 'owner')->findOrFail($this->showingId);
+        $from = $workItem->people->findOrFail($this->showingForId);
+
+        $this->authorize('movePlace', [$workItem, $from]);
+
+        $this->validate(['moveToId' => ['required', Rule::in($this->peopleICanDraftFor()->except($from->id)->modelKeys())]], attributes: ['moveToId' => 'person']);
+
+        $workItem->movePlace($from, $this->peopleICanDraftFor()->find($this->moveToId), by: auth()->user());
+
+        $this->reset('showingId', 'showingForId', 'moveToId');
+
+        Flux::modal('work-item')->close();
+        Flux::toast('Moved.', variant: 'success');
+    }
+
+    /**
+     * Check before giving everything open that one of my people is on to someone else. Who it goes to is kept
+     * per person, so that a choice made in one person's drawer is never waiting in another's.
+     */
+    public function askToMoveAll(int $personId): void
+    {
+        $from = auth()->user()->reports()->findOrFail($personId);
+
+        $this->validateWhoGetsEverythingFrom($from);
+
+        $this->movingAllFromId = $from->id;
+
+        Flux::modal('confirm-move-all')->show();
+    }
+
+    public function moveAll(): void
+    {
+        $from = auth()->user()->reports()->findOrFail($this->movingAllFromId);
+
+        $this->validateWhoGetsEverythingFrom($from);
+
+        $from->moveOpenWorkTo($this->peopleICanDraftFor()->find($this->moveAllTo[$from->id]), by: auth()->user());
+
+        $this->reset('movingAllFromId');
+        $this->nobodyIsChosenToMoveEverythingTo();
+
+        Flux::modal('confirm-move-all')->close();
+        Flux::modal('work-of-'.$from->id)->close();
+        Flux::toast('Moved.', variant: 'success');
     }
 
     /**
@@ -123,6 +207,37 @@ class MyTeam extends Component
     public function clearDraft(): void
     {
         $this->reset('draftTitle', 'draftStartsOn', 'draftDueOn', 'draftPersonIds', 'draftOwnerId', 'tryingDraft');
+    }
+
+    /**
+     * Each person's "move it all to" starts as an empty choice. Left unset, the browser shows the
+     * first name in the list as if it had been picked.
+     */
+    private function nobodyIsChosenToMoveEverythingTo(): void
+    {
+        $this->moveAllTo = array_fill_keys(auth()->user()->reports()->modelKeys(), '');
+    }
+
+    /**
+     * Moving secret work lets someone new see it. A lead already sees the secret work of their own people.
+     */
+    private function warningAboutSecretWork(int $howMuchIsSecret, User $to): ?string
+    {
+        if (! $howMuchIsSecret || $to->is(auth()->user())) {
+            return null;
+        }
+
+        return $howMuchIsSecret === 1
+            ? '1 of these is secret. '.$to->full_name.' will be able to see it.'
+            : $howMuchIsSecret.' of these are secret. '.$to->full_name.' will be able to see them.';
+    }
+
+    private function validateWhoGetsEverythingFrom(User $from): void
+    {
+        $this->validate(
+            ['moveAllTo.'.$from->id => ['required', Rule::in($this->peopleICanDraftFor()->except($from->id)->modelKeys())]],
+            attributes: ['moveAllTo.'.$from->id => 'person'],
+        );
     }
 
     private function validateDraft(): void
@@ -186,9 +301,9 @@ class MyTeam extends Component
     }
 
     /**
-     * What one person is carrying: the work with ballpark dates as bars for the timeline, and the rest grouped by where it sits.
+     * What one person is carrying: the work with ballpark dates as bars for the timeline, and all of it grouped by where it sits.
      *
-     * @return array{person: User, name: string, bars: Collection, draft: array|null, otherWork: Collection<string, Collection<int, WorkItem>>}
+     * @return array{person: User, name: string, bars: Collection, draft: array|null, openWork: Collection<string, Collection<int, WorkItem>>, openWorkCount: int, secretCount: int}
      */
     private function planFor(User $person, Carbon $thisWeek): array
     {
@@ -203,6 +318,7 @@ class MyTeam extends Component
         return [
             'person' => $person,
             'name' => ucfirst($person->nameAsSeenBy(auth()->user())),
+            'canMoveAllTo' => auth()->user()->isLineManagerOf($person) ? $this->peopleICanDraftFor()->except($person->id) : collect(),
             'bars' => $openWork->filter->hasBallparkDates()->map(fn (WorkItem $workItem) => [
                 'workItem' => $workItem,
                 'from' => $this->weekOf($workItem->starts_on, $thisWeek),
@@ -210,7 +326,9 @@ class MyTeam extends Component
                 'where' => $this->whereItSits($workItem),
             ]),
             'draft' => $this->draftFor($person, $openWork, $thisWeek),
-            'otherWork' => $openWork->reject->hasBallparkDates()->groupBy(fn (WorkItem $workItem) => ucfirst($this->whereItSits($workItem)))->sortKeysDesc(),
+            'openWork' => $openWork->groupBy(fn (WorkItem $workItem) => ucfirst($this->whereItSits($workItem)))->sortKeysDesc(),
+            'openWorkCount' => $openWork->count(),
+            'secretCount' => $openWork->filter->isSecret()->count(),
         ];
     }
 
